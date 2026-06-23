@@ -1,0 +1,92 @@
+{
+    "_comment": "DO NOT EDIT: FILE GENERATED AUTOMATICALLY BY PTERODACTYL PANEL - PTERODACTYL.IO",
+    "meta": {
+        "version": "PTDL_v2",
+        "update_url": null
+    },
+    "exported_at": "2026-06-23T00:00:00+00:00",
+    "name": "AeroVM",
+    "author": "aerovm@sosuku325.dev",
+    "description": "Lightweight QEMU-based VM for Pterodactyl. Free and open source.",
+    "features": null,
+    "docker_images": {
+        "Alpine": "ghcr.io/sosuku325/aerovm:alpine"
+    },
+    "file_denylist": [],
+    "startup": "#AeroVM",
+    "config": {
+        "files": "{}",
+        "startup": "{\"done\": [\"Starting AeroVM\"]}",
+        "logs": "{}",
+        "stop": "^C"
+    },
+    "scripts": {
+        "installation": {
+            "script": null,
+            "container": "alpine:3.19",
+            "entrypoint": "bash"
+        }
+    },
+    "variables": [
+        {
+            "name": "VM RAM (MB)",
+            "description": "Amount of RAM allocated to the VM in MB. Independent of Pterodactyl's memory limit.",
+            "env_variable": "VM_RAM_MB",
+            "default_value": "512",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|numeric|min:128",
+            "field_type": "text"
+        },
+        {
+            "name": "VM CPU Cores",
+            "description": "Number of vCPU cores allocated to the VM. Keep this at or below the physical core count of the node.",
+            "env_variable": "VM_CPU_CORES",
+            "default_value": "1",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|numeric|min:1|max:16",
+            "field_type": "text"
+        },
+        {
+            "name": "VM Disk Size (GB)",
+            "description": "Size of the virtual disk image in GB.",
+            "env_variable": "VM_DISK_GB",
+            "default_value": "20",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|numeric|min:1",
+            "field_type": "text"
+        },
+        {
+            "name": "Display Mode",
+            "description": "How to access the VM. ssh: console via Pterodactyl port. vnc: raw VNC. novnc: browser-based VNC. none: headless.",
+            "env_variable": "DISPLAY_MODE",
+            "default_value": "ssh",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|in:ssh,vnc,novnc,none",
+            "field_type": "text"
+        },
+        {
+            "name": "Additional Ports",
+            "description": "Extra ports to forward into the VM. Comma-separated. Use hostport-guestport format or a single port number for same-to-same mapping. Example: 8080-80,443",
+            "env_variable": "ADDITIONAL_PORTS",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string",
+            "field_type": "text"
+        },
+        {
+            "name": "Enable UEFI",
+            "description": "Boot the VM with UEFI firmware (OVMF). Disable for legacy BIOS. Some OS images require this.",
+            "env_variable": "UEFI",
+            "default_value": "0",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|boolean",
+            "field_type": "text"
+        }
+    ]
+}
