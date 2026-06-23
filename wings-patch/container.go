@@ -1,0 +1,369 @@
+package docker
+
+import (
+	"bufio"
+	"context"
+	"fmt"
+	"io"
+	"os"
+	"strconv"
+	"strings"
+	"time"
+
+	"emperror.dev/errors"
+	"github.com/apex/log"
+	"github.com/buger/jsonparser"
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/image"
+	"github.com/docker/docker/api/types/mount"
+	"github.com/docker/docker/api/types/network"
+	"github.com/docker/docker/client"
+	"github.com/pterodactyl/wings/config"
+	"github.com/pterodactyl/wings/environment"
+	"github.com/pterodactyl/wings/system"
+)
+
+var ErrNotAttached = errors.Sentinel("not attached to instance")
+
+type noopWriter struct{}
+
+var _ io.Writer = noopWriter{}
+
+func (nw noopWriter) Write(b []byte) (int, error) {
+	return len(b), nil
+}
+
+func (e *Environment) Attach(ctx context.Context) error {
+	if e.IsAttached() {
+		return nil
+	}
+
+	opts := container.AttachOptions{
+		Stdin:  true,
+		Stdout: true,
+		Stderr: true,
+		Stream: true,
+	}
+
+	if st, err := e.client.ContainerAttach(ctx, e.Id, opts); err != nil {
+		return errors.WrapIf(err, "environment/docker: error while attaching to container")
+	} else {
+		e.SetStream(&st)
+	}
+
+	go func() {
+		pollCtx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		defer e.stream.Close()
+		defer func() {
+			e.SetState(environment.ProcessOfflineState)
+			e.SetStream(nil)
+		}()
+
+		go func() {
+			if err := e.pollResources(pollCtx); err != nil {
+				if !errors.Is(err, context.Canceled) {
+					e.log().WithField("error", err).Error("error during environment resource polling")
+				} else {
+					e.log().Warn("stopping server resource polling: context canceled")
+				}
+			}
+		}()
+
+		if err := system.ScanReader(e.stream.Reader, func(v []byte) {
+			e.logCallbackMx.Lock()
+			defer e.logCallbackMx.Unlock()
+			e.logCallback(v)
+		}); err != nil && err != io.EOF {
+			log.WithField("error", err).WithField("container_id", e.Id).Warn("error processing scanner line in console output")
+			return
+		}
+	}()
+
+	return nil
+}
+
+func (e *Environment) InSituUpdate() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if _, err := e.ContainerInspect(ctx); err != nil {
+		if client.IsErrNotFound(err) {
+			return nil
+		}
+		return errors.Wrap(err, "environment/docker: could not inspect container")
+	}
+
+	if _, err := e.client.ContainerUpdate(ctx, e.Id, container.UpdateConfig{
+		Resources: e.Configuration.Limits().AsContainerResources(),
+	}); err != nil {
+		return errors.Wrap(err, "environment/docker: could not update container")
+	}
+
+	return nil
+}
+
+func (e *Environment) Create() error {
+	ctx := context.Background()
+
+	if _, err := e.ContainerInspect(ctx); err == nil {
+		return nil
+	} else if !client.IsErrNotFound(err) {
+		return errors.WrapIf(err, "environment/docker: failed to inspect container")
+	}
+
+	if err := e.ensureImageExists(e.meta.Image); err != nil {
+		return errors.WithStackIf(err)
+	}
+
+	cfg := config.Get()
+	a := e.Configuration.Allocations()
+
+	evs := e.Configuration.EnvironmentVariables()
+	for i, v := range evs {
+		if v == "SERVER_IP=127.0.0.1" {
+			evs[i] = "SERVER_IP=" + cfg.Docker.Network.Interface
+		}
+	}
+
+	confLabels := e.Configuration.Labels()
+	labels := make(map[string]string, 2+len(confLabels))
+	for k, v := range confLabels {
+		labels[k] = v
+	}
+	labels["Service"] = "Pterodactyl"
+	labels["ContainerType"] = "server_process"
+
+	conf := &container.Config{
+		Hostname:     e.Id,
+		Domainname:   cfg.Docker.Domainname,
+		AttachStdin:  true,
+		AttachStdout: true,
+		AttachStderr: true,
+		OpenStdin:    true,
+		Tty:          true,
+		ExposedPorts: a.Exposed(),
+		Image:        strings.TrimPrefix(e.meta.Image, "~"),
+		Env:          e.Configuration.EnvironmentVariables(),
+		Labels:       labels,
+	}
+
+	if cfg.System.User.Rootless.Enabled {
+		conf.User = fmt.Sprintf("%d:%d", cfg.System.User.Rootless.ContainerUID, cfg.System.User.Rootless.ContainerGID)
+	} else {
+		conf.User = strconv.Itoa(cfg.System.User.Uid) + ":" + strconv.Itoa(cfg.System.User.Gid)
+	}
+
+	networkMode := container.NetworkMode(cfg.Docker.Network.Mode)
+	if a.ForceOutgoingIP {
+		e.log().Debug("environment/docker: forcing outgoing IP address")
+		networkName := "ip-" + strings.ReplaceAll(strings.ReplaceAll(a.DefaultMapping.Ip, ".", "-"), ":", "-")
+		networkMode = container.NetworkMode(networkName)
+
+		if _, err := e.client.NetworkInspect(ctx, networkName, network.InspectOptions{}); err != nil {
+			if !client.IsErrNotFound(err) {
+				return err
+			}
+
+			enableIPv6 := false
+			if _, err := e.client.NetworkCreate(ctx, networkName, network.CreateOptions{
+				Driver:     "bridge",
+				EnableIPv6: &enableIPv6,
+				Internal:   false,
+				Attachable: false,
+				Ingress:    false,
+				ConfigOnly: false,
+				Options: map[string]string{
+					"encryption":                               "false",
+					"com.docker.network.bridge.default_bridge": "false",
+					"com.docker.network.host_ipv4":             a.DefaultMapping.Ip,
+				},
+			}); err != nil {
+				return err
+			}
+		}
+	}
+
+	hostConf := &container.HostConfig{
+		PortBindings: a.DockerBindings(),
+		Mounts:       e.convertMounts(),
+		Tmpfs: map[string]string{
+			"/tmp": "rw,exec,nosuid,size=" + strconv.Itoa(int(cfg.Docker.TmpfsSize)) + "M",
+		},
+		Resources:      e.Configuration.Limits().AsContainerResources(),
+		DNS:            cfg.Docker.Network.Dns,
+		LogConfig:      cfg.Docker.ContainerLogConfig(),
+		Devices:        hostDevices(),
+		SecurityOpt:    []string{"no-new-privileges"},
+		ReadonlyRootfs: true,
+		CapDrop: []string{
+			"setpcap", "mknod", "audit_write", "net_raw", "dac_override",
+			"fowner", "fsetid", "net_bind_service", "sys_chroot", "setfcap",
+		},
+		NetworkMode: networkMode,
+		UsernsMode:  container.UsernsMode(cfg.Docker.UsernsMode),
+	}
+
+	if _, err := e.client.ContainerCreate(ctx, conf, hostConf, nil, nil, e.Id); err != nil {
+		return errors.Wrap(err, "environment/docker: failed to create container")
+	}
+
+	return nil
+}
+
+func hostDevices() []container.DeviceMapping {
+	var devices []container.DeviceMapping
+	for _, path := range []string{"/dev/kvm"} {
+		if _, err := os.Stat(path); err == nil {
+			devices = append(devices, container.DeviceMapping{
+				PathOnHost:        path,
+				PathInContainer:   path,
+				CgroupPermissions: "rwm",
+			})
+		}
+	}
+	return devices
+}
+
+func (e *Environment) Destroy() error {
+	e.SetState(environment.ProcessStoppingState)
+
+	err := e.client.ContainerRemove(context.Background(), e.Id, container.RemoveOptions{
+		RemoveVolumes: true,
+		RemoveLinks:   false,
+		Force:         true,
+	})
+
+	e.SetState(environment.ProcessOfflineState)
+
+	if err != nil && client.IsErrNotFound(err) {
+		return nil
+	}
+
+	return err
+}
+
+func (e *Environment) SendCommand(c string) error {
+	if !e.IsAttached() {
+		return errors.Wrap(ErrNotAttached, "environment/docker: cannot send command to container")
+	}
+
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	if e.meta.Stop.Type == "command" && c == e.meta.Stop.Value {
+		e.SetState(environment.ProcessStoppingState)
+	}
+
+	_, err := e.stream.Conn.Write([]byte(c + "\n"))
+	return errors.Wrap(err, "environment/docker: could not write to container stream")
+}
+
+
+func (e *Environment) Readlog(lines int) ([]string, error) {
+	r, err := e.client.ContainerLogs(context.Background(), e.Id, container.LogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+		Tail:       strconv.Itoa(lines),
+	})
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	defer r.Close()
+
+	var out []string
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		out = append(out, scanner.Text())
+	}
+
+	return out, nil
+}
+
+func (e *Environment) ensureImageExists(img string) error {
+	e.Events().Publish(environment.DockerImagePullStarted, "")
+	defer e.Events().Publish(environment.DockerImagePullCompleted, "")
+
+	if strings.HasPrefix(img, "~") {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+	defer cancel()
+
+	var registryAuth *config.RegistryConfiguration
+	for registry, c := range config.Get().Docker.Registries {
+		if !strings.HasPrefix(img, registry) {
+			continue
+		}
+		log.WithField("registry", registry).Debug("using authentication for registry")
+		registryAuth = &c
+		break
+	}
+
+	imagePullOptions := image.PullOptions{All: false}
+	if registryAuth != nil {
+		b64, err := registryAuth.Base64()
+		if err != nil {
+			log.WithError(err).Error("failed to get registry auth credentials")
+		}
+		imagePullOptions.RegistryAuth = b64
+	}
+
+	out, err := e.client.ImagePull(ctx, img, imagePullOptions)
+	if err != nil {
+		images, ierr := e.client.ImageList(ctx, image.ListOptions{})
+		if ierr != nil {
+			return errors.Wrap(ierr, "environment/docker: failed to list images")
+		}
+
+		for _, img2 := range images {
+			for _, t := range img2.RepoTags {
+				if t != img {
+					continue
+				}
+				log.WithFields(log.Fields{
+					"image":        img,
+					"container_id": e.Id,
+					"err":          err.Error(),
+				}).Warn("unable to pull requested image from remote source, however the image exists locally")
+				return nil
+			}
+		}
+
+		return errors.Wrapf(err, "environment/docker: failed to pull \"%s\" image for server", img)
+	}
+	defer out.Close()
+
+	log.WithField("image", img).Debug("pulling docker image... this could take a bit of time")
+
+	scanner := bufio.NewScanner(out)
+	for scanner.Scan() {
+		b := scanner.Bytes()
+		status, _ := jsonparser.GetString(b, "status")
+		progress, _ := jsonparser.GetString(b, "progress")
+		e.Events().Publish(environment.DockerImagePullStatus, status+" "+progress)
+	}
+
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+
+	log.WithField("image", img).Debug("completed docker image pull")
+
+	return nil
+}
+
+func (e *Environment) convertMounts() []mount.Mount {
+	mounts := e.Configuration.Mounts()
+	out := make([]mount.Mount, len(mounts))
+	for i, m := range mounts {
+		out[i] = mount.Mount{
+			Type:     mount.TypeBind,
+			Source:   m.Source,
+			Target:   m.Target,
+			ReadOnly: m.ReadOnly,
+		}
+	}
+	return out
+}
