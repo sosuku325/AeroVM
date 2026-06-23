@@ -2,9 +2,10 @@ set -euo pipefail
 
 WINGS_BIN="/usr/local/bin/wings"
 WINGS_SERVICE="wings"
-PATCH_URL="https://raw.githubusercontent.com/sosuku325/aerovm/main/wings-patch/container.go.patch"
 WINGS_REPO="https://github.com/pterodactyl/wings"
+CONTAINER_GO_URL="https://raw.githubusercontent.com/sosuku325/aerovm/main/wings-patch/container.go"
 GO_MIN_VERSION="1.21"
+SUPPORTED_WINGS_VERSION="v1.11.9"
 
 require_root() {
     if [ "$(id -u)" -ne 0 ]; then
@@ -15,9 +16,7 @@ require_root() {
 
 check_kvm() {
     if [ ! -e /dev/kvm ]; then
-        echo "WARNING: /dev/kvm not found on this host"
-        echo "         KVM patch will still be applied, but hardware acceleration"
-        echo "         will not be available until KVM is enabled on the host."
+        echo "WARNING: /dev/kvm not found — KVM patch will be applied but hardware acceleration unavailable"
     else
         echo "INFO: /dev/kvm found — KVM acceleration will be available"
     fi
@@ -32,10 +31,9 @@ check_go() {
 
     local version
     version=$(go version | grep -oP 'go\K[0-9]+\.[0-9]+')
-    local major minor
+    local major minor req_major req_minor
     major=$(echo "$version" | cut -d. -f1)
     minor=$(echo "$version" | cut -d. -f2)
-    local req_major req_minor
     req_major=$(echo "$GO_MIN_VERSION" | cut -d. -f1)
     req_minor=$(echo "$GO_MIN_VERSION" | cut -d. -f2)
 
@@ -44,6 +42,33 @@ check_go() {
         exit 1
     fi
     echo "INFO: Go ${version} found"
+}
+
+check_wings_version() {
+    if [ ! -f "$WINGS_BIN" ]; then
+        echo "ERROR: Wings binary not found at ${WINGS_BIN}" >&2
+        echo "       Install Wings first: https://pterodactyl.io/wings/1.0/installing.html" >&2
+        exit 1
+    fi
+
+    local installed_version
+    installed_version=$("$WINGS_BIN" --version 2>/dev/null | grep -oP 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
+
+    if [ -z "$installed_version" ]; then
+        echo "ERROR: Could not determine Wings version" >&2
+        exit 1
+    fi
+
+    echo "INFO: Wings version: ${installed_version}"
+
+    if [ "$installed_version" != "$SUPPORTED_WINGS_VERSION" ]; then
+        echo "ERROR: Unsupported Wings version: ${installed_version}" >&2
+        echo "       AeroVM supports Wings ${SUPPORTED_WINGS_VERSION} only" >&2
+        echo "       Upgrade or downgrade Wings before applying this patch" >&2
+        exit 1
+    fi
+
+    echo "INFO: Wings version check passed"
 }
 
 stop_wings() {
@@ -61,10 +86,9 @@ start_wings() {
 }
 
 backup_binary() {
-    if [ -f "$WINGS_BIN" ]; then
-        cp "$WINGS_BIN" "${WINGS_BIN}.bak.$(date +%Y%m%d%H%M%S)"
-        echo "INFO: Backed up existing Wings binary"
-    fi
+    local backup="${WINGS_BIN}.bak.$(date +%Y%m%d%H%M%S)"
+    cp "$WINGS_BIN" "$backup"
+    echo "INFO: Backed up existing Wings binary to ${backup}"
 }
 
 build_patched_wings() {
@@ -72,14 +96,11 @@ build_patched_wings() {
     workdir=$(mktemp -d)
     trap "rm -rf $workdir" EXIT
 
-    echo "INFO: Cloning Wings repository..."
-    git clone --depth=1 "$WINGS_REPO" "$workdir/wings"
+    echo "INFO: Cloning Wings ${SUPPORTED_WINGS_VERSION}..."
+    git clone --depth=1 --branch "$SUPPORTED_WINGS_VERSION" "$WINGS_REPO" "$workdir/wings"
 
-    echo "INFO: Applying KVM patch..."
-    if ! patch -p1 -d "$workdir/wings" < <(curl -fsSL "$PATCH_URL"); then
-        echo "ERROR: Failed to apply patch" >&2
-        exit 1
-    fi
+    echo "INFO: Downloading patched container.go..."
+    curl -fsSL "$CONTAINER_GO_URL" -o "$workdir/wings/environment/docker/container.go"
 
     echo "INFO: Building Wings..."
     (cd "$workdir/wings" && go build -o wings .)
@@ -106,6 +127,7 @@ main() {
     require_root
     check_kvm
     check_go
+    check_wings_version
     stop_wings
     backup_binary
     build_patched_wings
