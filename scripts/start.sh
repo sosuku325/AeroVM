@@ -18,17 +18,22 @@ validate_port() {
     fi
 }
 
-OS_DISKSIZE="${OS_DISKSIZE:-20}"
-MEMORY="${SERVER_MEMORY:-512}"
-CPU_CORES="${SERVER_CPU_LIMIT:-1}"
+VM_DISK_GB="${VM_DISK_GB:-20}"
+VM_RAM_MB="${VM_RAM_MB:-512}"
+VM_CPU_CORES="${VM_CPU_CORES:-1}"
 SERVER_PORT="${SERVER_PORT:-2222}"
 DISPLAY_MODE="${DISPLAY_MODE:-ssh}"
 UEFI="${UEFI:-0}"
 ADDITIONAL_PORTS="${ADDITIONAL_PORTS:-}"
 
-validate_int "OS_DISKSIZE" "$OS_DISKSIZE" 1
-validate_int "SERVER_MEMORY" "$MEMORY" 128
-validate_int "SERVER_CPU_LIMIT" "$CPU_CORES" 1
+validate_int "VM_DISK_GB" "$VM_DISK_GB" 1
+validate_int "VM_RAM_MB" "$VM_RAM_MB" 128
+validate_int "VM_CPU_CORES" "$VM_CPU_CORES" 1
+
+if [ "$VM_CPU_CORES" -gt 16 ]; then
+    echo "ERROR: VM_CPU_CORES must be <= 16 (got: $VM_CPU_CORES)" >&2
+    exit 1
+fi
 validate_port "SERVER_PORT" "$SERVER_PORT"
 
 case "$DISPLAY_MODE" in
@@ -39,7 +44,7 @@ case "$DISPLAY_MODE" in
         ;;
 esac
 
-
+#KVM
 
 QEMU_ACCEL=()
 AIO_MODE="threads"
@@ -53,12 +58,12 @@ else
     echo "INFO: KVM not available, using software emulation"
 fi
 
-
+#diskimage
 
 DISK_IMAGE="/home/container/disk.qcow2"
 
 if [ ! -f "$DISK_IMAGE" ]; then
-    qemu-img create -f qcow2 "$DISK_IMAGE" "${OS_DISKSIZE}G" \
+    qemu-img create -f qcow2 "$DISK_IMAGE" "${VM_DISK_GB}G" \
         || { echo "ERROR: Failed to create disk image" >&2; exit 1; }
 fi
 
@@ -90,12 +95,11 @@ build_hostfwd() {
     echo "$result"
 }
 
-
 NETDEV_OPTS=(-netdev "user,id=net0$(build_hostfwd)" -device virtio-net-pci,netdev=net0)
 
 
 
-#Display
+
 NOVNC_PORT=6080
 NOVNC_PID=""
 
@@ -129,9 +133,11 @@ build_display_opts() {
             ;;
     esac
 }
+
 read -ra DISPLAY_OPTS <<< "$(build_display_opts)"
 
 #UEFI
+
 UEFI_OPTS=()
 if [ "$UEFI" = "1" ]; then
     ovmf=""
@@ -150,8 +156,8 @@ echo "Starting AeroVM"
 
 exec qemu-system-x86_64 \
     "${QEMU_ACCEL[@]}" \
-    -m "${MEMORY}M" \
-    -smp "${CPU_CORES}" \
+    -m "${VM_RAM_MB}M" \
+    -smp "${VM_CPU_CORES}" \
     -drive "file=${DISK_IMAGE},format=qcow2,if=virtio,cache=writeback,aio=${AIO_MODE}" \
     "${NETDEV_OPTS[@]}" \
     "${DISPLAY_OPTS[@]}" \
