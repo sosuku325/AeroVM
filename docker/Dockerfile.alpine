@@ -1,14 +1,14 @@
 FROM alpine:3.19
 
-RUN apk add --no-cache \
+RUN echo "https://dl-cdn.alpinelinux.org/alpine/v3.19/community" >> /etc/apk/repositories \
+    && apk add --no-cache \
         qemu-system-x86_64 \
         qemu-img \
-        qemu-ui-vnc \
+        qemu-modules \
         ovmf \
-        novnc \
         bash \
+        novnc \
     && rm -rf /var/cache/apk/*
-
 RUN addgroup -g 103 kvm 2>/dev/null || true \
     && adduser -D -u 1000 -s /bin/bash container \
     && adduser container kvm
