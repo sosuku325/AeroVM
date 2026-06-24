@@ -1,4 +1,6 @@
+#!/bin/bash
 set -euo pipefail
+
 
 
 validate_int() {
@@ -44,7 +46,7 @@ case "$DISPLAY_MODE" in
         ;;
 esac
 
-#KVM
+
 
 QEMU_ACCEL=()
 AIO_MODE="threads"
@@ -58,7 +60,7 @@ else
     echo "INFO: KVM not available, using software emulation"
 fi
 
-#diskimage
+
 
 DISK_IMAGE="/home/container/disk.qcow2"
 
@@ -66,6 +68,7 @@ if [ ! -f "$DISK_IMAGE" ]; then
     qemu-img create -f qcow2 "$DISK_IMAGE" "${VM_DISK_GB}G" \
         || { echo "ERROR: Failed to create disk image" >&2; exit 1; }
 fi
+
 
 
 build_hostfwd() {
@@ -96,7 +99,6 @@ build_hostfwd() {
 }
 
 NETDEV_OPTS=(-netdev "user,id=net0$(build_hostfwd)" -device virtio-net-pci,netdev=net0)
-
 
 
 
@@ -136,7 +138,6 @@ build_display_opts() {
 
 read -ra DISPLAY_OPTS <<< "$(build_display_opts)"
 
-#UEFI
 
 UEFI_OPTS=()
 if [ "$UEFI" = "1" ]; then
