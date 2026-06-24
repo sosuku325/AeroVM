@@ -1,3 +1,4 @@
+#!/bin/bash
 set -euo pipefail
 
 WINGS_BIN="/usr/local/bin/wings"
