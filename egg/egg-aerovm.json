@@ -13,7 +13,7 @@
         "Alpine": "ghcr.io/sosuku325/aerovm:alpine"
     },
     "file_denylist": [],
-    "startup": "#AeroVM",
+    "startup": "/start.sh",
     "config": {
         "files": "{}",
         "startup": "{\"done\": [\"Starting AeroVM\"]}",
@@ -70,7 +70,7 @@
         },
         {
             "name": "Additional Ports",
-            "description": "Extra ports to forward into the VM. Comma-separated. Use hostport-guestport format or a single port number for same-to-same mapping. Example: 8080-80,443",
+            "description": "Extra ports to forward into the VM. These ports must also be assigned as Allocations in the Pterodactyl panel. Comma-separated. Use hostport-guestport or single port. Example: 8080-80,443",
             "env_variable": "ADDITIONAL_PORTS",
             "default_value": "",
             "user_viewable": true,
@@ -80,7 +80,7 @@
         },
         {
             "name": "Enable UEFI",
-            "description": "Boot the VM with UEFI firmware (OVMF). Disable for legacy BIOS. Some OS images require this.",
+            "description": "Boot the VM with UEFI firmware (OVMF). Disable for legacy BIOS.",
             "env_variable": "UEFI",
             "default_value": "0",
             "user_viewable": true,
