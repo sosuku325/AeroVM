@@ -16,8 +16,8 @@ RUN mkdir -p /opt/base-image \
     && curl -fsSL -o /opt/base-image/base.qcow2 \
         "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-generic-amd64.qcow2"
 
-RUN addgroup -g 103 kvm 2>/dev/null || true \
-    && adduser -D -u 1000 -s /bin/bash container \
+RUN (addgroup kvm 2>/dev/null || true) \
+    && adduser -D -s /bin/bash container \
     && adduser container kvm
 
 COPY scripts/start.sh /start.sh

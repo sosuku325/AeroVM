@@ -11,7 +11,7 @@ RUN apt-get update \
         novnc \
     && rm -rf /var/lib/apt/lists/*
 
-RUN groupadd -f -g 103 kvm \
+RUN groupadd -f kvm \
     && useradd -m -s /bin/bash container \
     && usermod -aG kvm container
 

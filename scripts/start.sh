@@ -87,7 +87,8 @@ if [ ! -f "$DISK_IMAGE" ]; then
             || { echo "ERROR: Failed to copy base cloud image" >&2; exit 1; }
 
         current_bytes="$(qemu-img info "$DISK_IMAGE" | sed -n '/bytes)/{s/.*(\([0-9]*\) bytes).*/\1/p;q}')"
-        requested_bytes=$(( VM_DISK_GB * 1024 * 1024 * 1024 ))
+        [[ "$current_bytes" =~ ^[0-9]+$ ]] || current_bytes=0
+        requested_bytes=$(( 10#$VM_DISK_GB * 1024 * 1024 * 1024 ))
         if [ "$requested_bytes" -gt "$current_bytes" ]; then
             qemu-img resize "$DISK_IMAGE" "${VM_DISK_GB}G" \
                 || { echo "ERROR: Failed to resize disk image" >&2; exit 1; }

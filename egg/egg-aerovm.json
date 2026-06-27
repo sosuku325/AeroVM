@@ -41,7 +41,7 @@
             "default_value": "512",
             "user_viewable": true,
             "user_editable": true,
-            "rules": "required|numeric|min:128",
+            "rules": "required|integer|min:128",
             "field_type": "text"
         },
         {
@@ -51,7 +51,7 @@
             "default_value": "1",
             "user_viewable": true,
             "user_editable": true,
-            "rules": "required|numeric|min:1|max:16",
+            "rules": "required|integer|min:1|max:16",
             "field_type": "text"
         },
         {
@@ -61,7 +61,7 @@
             "default_value": "20",
             "user_viewable": true,
             "user_editable": true,
-            "rules": "required|numeric|min:1",
+            "rules": "required|integer|min:1",
             "field_type": "text"
         },
         {
@@ -101,7 +101,7 @@
             "default_value": "aerovm",
             "user_viewable": true,
             "user_editable": true,
-            "rules": "required|string|max:63",
+            "rules": "required|string|max:63|regex:/^[a-zA-Z0-9-]+$/",
             "field_type": "text"
         },
         {
