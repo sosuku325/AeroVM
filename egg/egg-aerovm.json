@@ -10,10 +10,13 @@
     "description": "Lightweight QEMU-based VM for Pterodactyl. Free and open source.",
     "features": null,
     "docker_images": {
-        "Alpine": "ghcr.io/sosuku325/aerovm:alpine",
-        "Ubuntu 22.04 LTS": "ghcr.io/sosuku325/aerovm:ubuntu-22.04",
-        "Ubuntu 24.04 LTS": "ghcr.io/sosuku325/aerovm:ubuntu-24.04",
-        "Ubuntu 26.04 LTS": "ghcr.io/sosuku325/aerovm:ubuntu-26.04"
+        "Alpine (blank disk)": "ghcr.io/sosuku325/aerovm:alpine",
+        "Ubuntu 22.04 LTS (blank disk)": "ghcr.io/sosuku325/aerovm:ubuntu-22.04",
+        "Ubuntu 24.04 LTS (blank disk)": "ghcr.io/sosuku325/aerovm:ubuntu-24.04",
+        "Ubuntu 26.04 LTS (blank disk)": "ghcr.io/sosuku325/aerovm:ubuntu-26.04",
+        "Debian 12 (cloud-init)": "ghcr.io/sosuku325/aerovm:guest-debian-12",
+        "Ubuntu 22.04 (cloud-init)": "ghcr.io/sosuku325/aerovm:guest-ubuntu-22.04",
+        "Ubuntu 24.04 (cloud-init)": "ghcr.io/sosuku325/aerovm:guest-ubuntu-24.04"
     },
     "file_denylist": [],
     "startup": "/start.sh",
@@ -85,6 +88,46 @@
             "name": "Enable UEFI",
             "description": "Boot the VM with UEFI firmware (OVMF). Disable for legacy BIOS.",
             "env_variable": "UEFI",
+            "default_value": "0",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|boolean",
+            "field_type": "text"
+        },
+        {
+            "name": "Hostname",
+            "description": "Hostname for the guest OS. Only used by cloud-init images (Debian/Ubuntu cloud-init). Letters, numbers, and hyphens, up to 63 characters.",
+            "env_variable": "OS_HOSTNAME",
+            "default_value": "aerovm",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|max:63",
+            "field_type": "text"
+        },
+        {
+            "name": "Root Password",
+            "description": "Root/SSH password for the guest OS. Only used by cloud-init images. Leave blank to auto-generate a random password (printed to the console on first boot).",
+            "env_variable": "OS_PASSWORD",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string",
+            "field_type": "text"
+        },
+        {
+            "name": "Public SSH Key",
+            "description": "SSH public key for the guest OS. Only used by cloud-init images. If set, SSH password authentication is disabled.",
+            "env_variable": "OS_PUBKEY",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string",
+            "field_type": "text"
+        },
+        {
+            "name": "Update Packages on Boot",
+            "description": "Update all packages on every boot. Only used by cloud-init images. May add startup time.",
+            "env_variable": "PACKAGE_UPDATE",
             "default_value": "0",
             "user_viewable": true,
             "user_editable": true,

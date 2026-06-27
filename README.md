@@ -22,6 +22,7 @@ Works without KVM. Faster with KVM.
 - **KVM hybrid** — runs on software emulation by default; hardware acceleration when KVM is available
 - **Lightweight** — optimized QEMU flags, minimal Docker image (Alpine-based)
 - **Pterodactyl native** — one egg import, no panel modifications required
+- **Two ways to provision**: bring your own OS on a blank disk, or pick a cloud-init image (Debian/Ubuntu) that's ready to log into on first boot
 
 ## Requirements
 
@@ -71,7 +72,12 @@ Navigate to **Admin → Nests → Import Egg** and upload the file.
 
 **4. Create a server**
 
-Create a new server using the AeroVM egg. Configure RAM, CPU, and disk via the egg variables. Start the server — the VM will boot automatically, using KVM acceleration if step 1 was applied to that node.
+Create a new server using the AeroVM egg, and pick a **Docker Image**:
+
+- **Blank disk** (Alpine, Ubuntu 22.04/24.04/26.04 LTS): an empty disk — you provide the OS yourself (e.g. by uploading a pre-made disk image over SFTP).
+- **Cloud-init** (Debian 12, Ubuntu 22.04, Ubuntu 24.04): the disk is pre-provisioned from the official cloud image and ready to log into on first boot — set `OS_HOSTNAME`/`OS_PASSWORD`/`OS_PUBKEY` to configure it.
+
+Configure RAM, CPU, and disk via the egg variables. Start the server — the VM will boot automatically, using KVM acceleration if step 1 was applied to that node.
 
 > **Note:** `ADDITIONAL_PORTS` requires the ports to also be assigned as **Allocations** in the Pterodactyl panel. QEMU-side forwarding alone is not enough; Docker must also expose the port.
 
@@ -85,8 +91,14 @@ Create a new server using the AeroVM egg. Configure RAM, CPU, and disk via the e
 | `DISPLAY_MODE` | `ssh` / `vnc` / `novnc` / `none` | `ssh` |
 | `ADDITIONAL_PORTS` | Extra port forwards (e.g. `8080-80,443`) | — |
 | `UEFI` | Enable UEFI firmware (`0` or `1`) | `0` |
+| `OS_HOSTNAME` | Guest hostname (cloud-init images only) | `aerovm` |
+| `OS_PASSWORD` | Root/SSH password (cloud-init images only). Leave blank to auto-generate one (printed to the console on first boot) | — |
+| `OS_PUBKEY` | SSH public key (cloud-init images only). If set, password SSH login is disabled | — |
+| `PACKAGE_UPDATE` | Update packages on every boot (cloud-init images only, `0` or `1`) | `0` |
 
 > `VM_RAM_MB` and `VM_CPU_CORES` are independent of Pterodactyl's resource limits. Set them to values your node can actually support.
+>
+> `OS_HOSTNAME`/`OS_PASSWORD`/`OS_PUBKEY`/`PACKAGE_UPDATE` only have an effect on the cloud-init Docker images (Debian/Ubuntu). The blank-disk images (Alpine/Ubuntu LTS) ignore them since there's no OS installed yet to configure.
 
 ## Display Modes
 
@@ -104,10 +116,13 @@ AeroVM/
 ├── egg/
 │   └── egg-aerovm.json       # Pterodactyl egg (user-facing)
 ├── docker/
-│   ├── Dockerfile.alpine        # Alpine-based image (smallest)
-│   ├── Dockerfile.ubuntu-22.04  # Ubuntu 22.04 LTS image
-│   ├── Dockerfile.ubuntu-24.04  # Ubuntu 24.04 LTS image
-│   └── Dockerfile.ubuntu-26.04  # Ubuntu 26.04 LTS image
+│   ├── Dockerfile.alpine               # Alpine-based image, blank disk (smallest)
+│   ├── Dockerfile.ubuntu-22.04         # Ubuntu 22.04 LTS image, blank disk
+│   ├── Dockerfile.ubuntu-24.04         # Ubuntu 24.04 LTS image, blank disk
+│   ├── Dockerfile.ubuntu-26.04         # Ubuntu 26.04 LTS image, blank disk
+│   ├── Dockerfile.guest-debian-12      # Debian 12 cloud image bundled, cloud-init
+│   ├── Dockerfile.guest-ubuntu-22.04   # Ubuntu 22.04 cloud image bundled, cloud-init
+│   └── Dockerfile.guest-ubuntu-24.04   # Ubuntu 24.04 cloud image bundled, cloud-init
 ├── scripts/
 │   └── start.sh              # VM startup script
 ├── wings-patch/

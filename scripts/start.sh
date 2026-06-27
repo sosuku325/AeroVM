@@ -20,6 +20,10 @@ validate_port() {
     fi
 }
 
+yaml_dquote() {
+    printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
 VM_DISK_GB="${VM_DISK_GB:-20}"
 VM_RAM_MB="${VM_RAM_MB:-512}"
 VM_CPU_CORES="${VM_CPU_CORES:-1}"
@@ -27,6 +31,10 @@ SERVER_PORT="${SERVER_PORT:-2222}"
 DISPLAY_MODE="${DISPLAY_MODE:-ssh}"
 UEFI="${UEFI:-0}"
 ADDITIONAL_PORTS="${ADDITIONAL_PORTS:-}"
+OS_HOSTNAME="${OS_HOSTNAME:-aerovm}"
+OS_PASSWORD="${OS_PASSWORD:-}"
+OS_PUBKEY="${OS_PUBKEY:-}"
+PACKAGE_UPDATE="${PACKAGE_UPDATE:-0}"
 
 validate_int "VM_DISK_GB" "$VM_DISK_GB" 1
 validate_int "VM_RAM_MB" "$VM_RAM_MB" 128
@@ -46,6 +54,11 @@ case "$DISPLAY_MODE" in
         ;;
 esac
 
+if ! [[ "$OS_HOSTNAME" =~ ^[a-zA-Z0-9-]{1,63}$ ]]; then
+    echo "ERROR: OS_HOSTNAME must be 1-63 characters of letters, numbers, and hyphens (got: '$OS_HOSTNAME')" >&2
+    exit 1
+fi
+
 
 
 QEMU_ACCEL=()
@@ -63,10 +76,87 @@ fi
 
 
 DISK_IMAGE="/home/container/disk.qcow2"
+BASE_IMAGE="/opt/base-image/base.qcow2"
+CLOUD_INIT_MODE=0
+[ -f "$BASE_IMAGE" ] && CLOUD_INIT_MODE=1
 
 if [ ! -f "$DISK_IMAGE" ]; then
-    qemu-img create -f qcow2 "$DISK_IMAGE" "${VM_DISK_GB}G" \
-        || { echo "ERROR: Failed to create disk image" >&2; exit 1; }
+    if [ "$CLOUD_INIT_MODE" -eq 1 ]; then
+        echo "INFO: Provisioning disk from bundled cloud image"
+        cp "$BASE_IMAGE" "$DISK_IMAGE" \
+            || { echo "ERROR: Failed to copy base cloud image" >&2; exit 1; }
+
+        current_bytes="$(qemu-img info "$DISK_IMAGE" | sed -n '/bytes)/{s/.*(\([0-9]*\) bytes).*/\1/p;q}')"
+        requested_bytes=$(( VM_DISK_GB * 1024 * 1024 * 1024 ))
+        if [ "$requested_bytes" -gt "$current_bytes" ]; then
+            qemu-img resize "$DISK_IMAGE" "${VM_DISK_GB}G" \
+                || { echo "ERROR: Failed to resize disk image" >&2; exit 1; }
+        else
+            echo "INFO: VM_DISK_GB (${VM_DISK_GB}G) is not larger than the bundled image; keeping its original size"
+        fi
+    else
+        qemu-img create -f qcow2 "$DISK_IMAGE" "${VM_DISK_GB}G" \
+            || { echo "ERROR: Failed to create disk image" >&2; exit 1; }
+    fi
+fi
+
+CDROM_OPTS=()
+if [ "$CLOUD_INIT_MODE" -eq 1 ]; then
+    SEED_ISO="/home/container/seed.iso"
+    INSTANCE_ID_FILE="/home/container/.cloud-init-instance-id"
+
+    if [ -f "$INSTANCE_ID_FILE" ]; then
+        instance_id="$(cat "$INSTANCE_ID_FILE")"
+    else
+        instance_id="aerovm-$(tr -dc 'a-f0-9' </dev/urandom | head -c 16 || true)"
+        echo "$instance_id" > "$INSTANCE_ID_FILE"
+    fi
+
+    password="$OS_PASSWORD"
+    if [ -z "$password" ]; then
+        password="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 20 || true)"
+        echo "INFO: OS_PASSWORD was empty, generated root password: ${password}"
+    fi
+
+    pkg_update="false"
+    [ "$PACKAGE_UPDATE" = "1" ] && pkg_update="true"
+
+    pwauth="true"
+    ssh_keys_yaml=""
+    if [ -n "$OS_PUBKEY" ]; then
+        pwauth="false"
+        ssh_keys_yaml=$'ssh_authorized_keys:\n  - "'"$(yaml_dquote "$OS_PUBKEY")"'"'
+    fi
+
+    seed_dir="$(mktemp -d)"
+    hostname_esc="$(yaml_dquote "$OS_HOSTNAME")"
+    password_esc="$(yaml_dquote "$password")"
+
+    cat > "${seed_dir}/meta-data" <<EOF
+instance-id: ${instance_id}
+local-hostname: "${hostname_esc}"
+EOF
+
+    cat > "${seed_dir}/user-data" <<EOF
+#cloud-config
+hostname: "${hostname_esc}"
+manage_etc_hosts: true
+chpasswd:
+  expire: false
+password: "${password_esc}"
+ssh_pwauth: ${pwauth}
+package_update: ${pkg_update}
+package_upgrade: ${pkg_update}
+${ssh_keys_yaml}
+EOF
+
+    xorriso -as mkisofs -output "$SEED_ISO" -volid cidata -joliet -rock \
+        "${seed_dir}/user-data" "${seed_dir}/meta-data" >/dev/null 2>&1 \
+        || { echo "ERROR: Failed to build cloud-init seed image" >&2; exit 1; }
+
+    rm -rf "$seed_dir"
+
+    CDROM_OPTS=(-cdrom "$SEED_ISO")
 fi
 
 
@@ -173,6 +263,7 @@ exec qemu-system-x86_64 \
     "${NETDEV_OPTS[@]}" \
     "${DISPLAY_OPTS[@]}" \
     "${UEFI_OPTS[@]}" \
+    "${CDROM_OPTS[@]}" \
     -device virtio-balloon \
     -boot order=c \
     -no-reboot

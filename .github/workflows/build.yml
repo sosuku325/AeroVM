@@ -31,6 +31,12 @@ jobs:
             dockerfile: docker/Dockerfile.ubuntu-24.04
           - tag: ubuntu-26.04
             dockerfile: docker/Dockerfile.ubuntu-26.04
+          - tag: guest-debian-12
+            dockerfile: docker/Dockerfile.guest-debian-12
+          - tag: guest-ubuntu-22.04
+            dockerfile: docker/Dockerfile.guest-ubuntu-22.04
+          - tag: guest-ubuntu-24.04
+            dockerfile: docker/Dockerfile.guest-ubuntu-24.04
 
     steps:
       - name: Checkout
