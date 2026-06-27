@@ -155,7 +155,7 @@
             "default_value": "",
             "user_viewable": false,
             "user_editable": false,
-            "rules": "nullable|string",
+            "rules": "nullable|string|regex:/^[^,\"]*$/",
             "field_type": "text"
         },
         {
