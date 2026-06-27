@@ -70,7 +70,7 @@
         },
         {
             "name": "Display Mode",
-            "description": "How to access the VM. ssh: console via Pterodactyl port. vnc: raw VNC. novnc: browser-based VNC. spice: SPICE protocol. rdp: RDP (cloud-init images only). none: headless. vnc/novnc/spice/rdp on a cloud-init image automatically install a desktop environment on first boot.",
+            "description": "How to access the VM. ssh: console via Pterodactyl port. vnc: raw VNC (port 5900). novnc: browser-based VNC (port 6080). spice: SPICE protocol (port 5900). rdp: RDP (port 3389, cloud-init images only). none: headless. vnc/novnc/spice/rdp on a cloud-init image automatically install a desktop environment on first boot. vnc/novnc/spice/rdp all require their port to also be assigned as an Allocation in the panel.",
             "env_variable": "DISPLAY_MODE",
             "default_value": "ssh",
             "user_viewable": true,
