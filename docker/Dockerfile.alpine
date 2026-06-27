@@ -5,6 +5,7 @@ RUN echo "https://dl-cdn.alpinelinux.org/alpine/v3.19/community" >> /etc/apk/rep
         qemu-system-x86_64 \
         qemu-img \
         qemu-modules \
+        qemu-ui-spice-core \
         ovmf \
         bash \
         novnc \

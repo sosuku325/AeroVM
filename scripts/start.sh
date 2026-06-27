@@ -35,6 +35,11 @@ OS_HOSTNAME="${OS_HOSTNAME:-aerovm}"
 OS_PASSWORD="${OS_PASSWORD:-}"
 OS_PUBKEY="${OS_PUBKEY:-}"
 PACKAGE_UPDATE="${PACKAGE_UPDATE:-0}"
+IPV4_MODE="${IPV4_MODE:-user}"
+OVERWRITE_HOST="${OVERWRITE_HOST:-}"
+OVERWRITE_IP="${OVERWRITE_IP:-}"
+BANNER="${BANNER:-}"
+CLOUD_OS_FAMILY="${CLOUD_OS_FAMILY:-}"
 
 validate_int "VM_DISK_GB" "$VM_DISK_GB" 1
 validate_int "VM_RAM_MB" "$VM_RAM_MB" 128
@@ -47,15 +52,37 @@ fi
 validate_port "SERVER_PORT" "$SERVER_PORT"
 
 case "$DISPLAY_MODE" in
-    ssh|vnc|novnc|none) ;;
+    ssh|vnc|novnc|spice|rdp|none) ;;
     *)
-        echo "ERROR: DISPLAY_MODE must be one of: ssh, vnc, novnc, none" >&2
+        echo "ERROR: DISPLAY_MODE must be one of: ssh, vnc, novnc, spice, rdp, none" >&2
+        exit 1
+        ;;
+esac
+
+case "$IPV4_MODE" in
+    disabled|user|all) ;;
+    *)
+        echo "ERROR: IPV4_MODE must be one of: disabled, user, all" >&2
         exit 1
         ;;
 esac
 
 if ! [[ "$OS_HOSTNAME" =~ ^[a-zA-Z0-9-]{1,63}$ ]]; then
     echo "ERROR: OS_HOSTNAME must be 1-63 characters of letters, numbers, and hyphens (got: '$OS_HOSTNAME')" >&2
+    exit 1
+fi
+
+if [[ "$OVERWRITE_HOST" == *","* ]] || [[ "$OVERWRITE_HOST" == *"\""* ]]; then
+    echo "ERROR: OVERWRITE_HOST must not contain commas or quotes" >&2
+    exit 1
+fi
+
+BASE_IMAGE="/opt/base-image/base.qcow2"
+CLOUD_INIT_MODE=0
+[ -f "$BASE_IMAGE" ] && CLOUD_INIT_MODE=1
+
+if [ "$DISPLAY_MODE" = "rdp" ] && [ "$CLOUD_INIT_MODE" -ne 1 ]; then
+    echo "ERROR: DISPLAY_MODE=rdp requires a cloud-init image (blank-disk images have no guest OS to provide RDP)" >&2
     exit 1
 fi
 
@@ -76,9 +103,6 @@ fi
 
 
 DISK_IMAGE="/home/container/disk.qcow2"
-BASE_IMAGE="/opt/base-image/base.qcow2"
-CLOUD_INIT_MODE=0
-[ -f "$BASE_IMAGE" ] && CLOUD_INIT_MODE=1
 
 if [ ! -f "$DISK_IMAGE" ]; then
     if [ "$CLOUD_INIT_MODE" -eq 1 ]; then
@@ -100,6 +124,58 @@ if [ ! -f "$DISK_IMAGE" ]; then
             || { echo "ERROR: Failed to create disk image" >&2; exit 1; }
     fi
 fi
+
+needs_desktop=0
+case "$DISPLAY_MODE" in
+    vnc|novnc|spice|rdp) [ "$CLOUD_INIT_MODE" -eq 1 ] && needs_desktop=1 ;;
+esac
+
+build_desktop_runcmd() {
+    case "$CLOUD_OS_FAMILY" in
+        debian)
+            echo "  - apt-get update"
+            echo "  - DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xfce4 lightdm"
+            [ "$DISPLAY_MODE" = "spice" ] && echo "  - DEBIAN_FRONTEND=noninteractive apt-get install -y spice-vdagent"
+            if [ "$DISPLAY_MODE" = "rdp" ]; then
+                echo "  - DEBIAN_FRONTEND=noninteractive apt-get install -y xrdp"
+                echo "  - systemctl enable --now xrdp"
+            fi
+            ;;
+        fedora)
+            echo "  - dnf install -y xfce4-session lightdm"
+            [ "$DISPLAY_MODE" = "spice" ] && echo "  - dnf install -y spice-vdagent"
+            if [ "$DISPLAY_MODE" = "rdp" ]; then
+                echo "  - dnf install -y xrdp"
+                echo "  - systemctl enable --now xrdp"
+            fi
+            ;;
+        rhel)
+            echo "  - dnf install -y epel-release"
+            echo "  - dnf install -y xfce4-session lightdm"
+            [ "$DISPLAY_MODE" = "spice" ] && echo "  - dnf install -y spice-vdagent"
+            if [ "$DISPLAY_MODE" = "rdp" ]; then
+                echo "  - dnf install -y xrdp"
+                echo "  - systemctl enable --now xrdp"
+            fi
+            ;;
+        arch)
+            echo "  - pacman -Sy --noconfirm xfce4 lightdm lightdm-gtk-greeter"
+            [ "$DISPLAY_MODE" = "spice" ] && echo "  - pacman -Sy --noconfirm spice-vdagent"
+            if [ "$DISPLAY_MODE" = "rdp" ]; then
+                echo "  - pacman -Sy --noconfirm xrdp"
+                echo "  - systemctl enable --now xrdp"
+            fi
+            ;;
+        *)
+            echo "  - true # WARNING: unknown CLOUD_OS_FAMILY, desktop packages not installed" 1>&2
+            ;;
+    esac
+
+    if [ "$DISPLAY_MODE" != "rdp" ]; then
+        echo "  - systemctl enable lightdm"
+        echo "  - systemctl set-default graphical.target || true"
+    fi
+}
 
 CDROM_OPTS=()
 if [ "$CLOUD_INIT_MODE" -eq 1 ]; then
@@ -123,15 +199,25 @@ if [ "$CLOUD_INIT_MODE" -eq 1 ]; then
     [ "$PACKAGE_UPDATE" = "1" ] && pkg_update="true"
 
     pwauth="true"
-    ssh_keys_yaml=""
+    root_keys_yaml=""
     if [ -n "$OS_PUBKEY" ]; then
         pwauth="false"
-        ssh_keys_yaml=$'ssh_authorized_keys:\n  - "'"$(yaml_dquote "$OS_PUBKEY")"'"'
+        root_keys_yaml=$'    ssh_authorized_keys:\n      - "'"$(yaml_dquote "$OS_PUBKEY")"'"'
     fi
 
     seed_dir="$(mktemp -d)"
     hostname_esc="$(yaml_dquote "$OS_HOSTNAME")"
     password_esc="$(yaml_dquote "$password")"
+
+    desktop_users_yaml=""
+    desktop_runcmd_yaml=""
+    desktop_chpasswd_yaml=""
+    if [ "$needs_desktop" -eq 1 ]; then
+        desktop_users_yaml=$'  - name: aerovm\n    lock_passwd: false\n    sudo: ALL=(ALL) NOPASSWD:ALL\n    shell: /bin/bash'
+        desktop_runcmd_yaml=$'runcmd:\n'"$(build_desktop_runcmd)"
+        desktop_chpasswd_yaml="    aerovm:${password_esc}"
+        echo "INFO: DISPLAY_MODE=${DISPLAY_MODE} requires a desktop environment; cloud-init will install it on first boot (may take a few minutes)"
+    fi
 
     cat > "${seed_dir}/meta-data" <<EOF
 instance-id: ${instance_id}
@@ -142,13 +228,20 @@ EOF
 #cloud-config
 hostname: "${hostname_esc}"
 manage_etc_hosts: true
-chpasswd:
-  expire: false
-password: "${password_esc}"
+disable_root: false
 ssh_pwauth: ${pwauth}
 package_update: ${pkg_update}
 package_upgrade: ${pkg_update}
-${ssh_keys_yaml}
+chpasswd:
+  expire: false
+  list: |
+    root:${password_esc}
+${desktop_chpasswd_yaml}
+users:
+  - name: root
+${root_keys_yaml}
+${desktop_users_yaml}
+${desktop_runcmd_yaml}
 EOF
 
     xorriso -as mkisofs -output "$SEED_ISO" -volid cidata -joliet -rock \
@@ -164,7 +257,23 @@ fi
 
 build_hostfwd() {
     local result=",hostfwd=tcp::${SERVER_PORT}-:22"
-    [ -z "$ADDITIONAL_PORTS" ] && { echo "$result"; return; }
+
+    if [ "$DISPLAY_MODE" = "rdp" ]; then
+        result="${result},hostfwd=tcp::3389-:3389"
+    fi
+
+    if [ "$IPV4_MODE" = "all" ]; then
+        echo "INFO: IPV4_MODE=all forwards ports 1-1024; this can noticeably slow down VM startup" >&2
+        local p
+        for ((p = 1; p <= 1024; p++)); do
+            result="${result},hostfwd=tcp::${p}-:${p}"
+        done
+    fi
+
+    if [ "$IPV4_MODE" = "disabled" ] || [ -z "$ADDITIONAL_PORTS" ]; then
+        echo "$result"
+        return
+    fi
 
     local mapping host_p guest_p
     while IFS= read -r mapping; do
@@ -223,17 +332,24 @@ build_display_opts() {
         ssh)
             echo "-nographic -serial mon:stdio"
             ;;
-        vnc)
+        vnc|novnc)
             echo "-display vnc=:0 -vga virtio"
             ;;
-        novnc)
-            echo "-display vnc=:0 -vga virtio"
+        spice)
+            echo "-spice port=5900,disable-ticketing=on -vga qxl"
             ;;
-        none)
+        rdp|none)
             echo "-display none"
             ;;
     esac
 }
+
+display_host_ref="${OVERWRITE_IP:-$(hostname)}"
+case "$DISPLAY_MODE" in
+    novnc) echo "INFO: noVNC will be available at http://${display_host_ref}:${NOVNC_PORT}/vnc.html" ;;
+    vnc|spice) echo "INFO: ${DISPLAY_MODE} will be available at ${display_host_ref}:5900" ;;
+    rdp) echo "INFO: RDP will be available at ${display_host_ref}:3389 (user: aerovm)" ;;
+esac
 
 [ "$DISPLAY_MODE" = "novnc" ] && start_novnc
 
@@ -252,7 +368,16 @@ if [ "$UEFI" = "1" ]; then
     UEFI_OPTS=(-bios "$ovmf")
 fi
 
+SMBIOS_OPTS=()
+if [ -n "$OVERWRITE_HOST" ]; then
+    SMBIOS_OPTS=(-smbios "type=1,manufacturer=${OVERWRITE_HOST},product=${OVERWRITE_HOST}")
+fi
 
+
+
+if [ -n "$BANNER" ]; then
+    echo -e "${BANNER}"
+fi
 
 echo "Starting AeroVM"
 
@@ -264,6 +389,7 @@ exec qemu-system-x86_64 \
     "${NETDEV_OPTS[@]}" \
     "${DISPLAY_OPTS[@]}" \
     "${UEFI_OPTS[@]}" \
+    "${SMBIOS_OPTS[@]}" \
     "${CDROM_OPTS[@]}" \
     -device virtio-balloon \
     -boot order=c \

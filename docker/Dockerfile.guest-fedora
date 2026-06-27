@@ -1,6 +1,6 @@
 FROM alpine:3.19
 
-ENV CLOUD_OS_FAMILY=debian
+ENV CLOUD_OS_FAMILY=fedora
 
 RUN echo "https://dl-cdn.alpinelinux.org/alpine/v3.19/community" >> /etc/apk/repositories \
     && apk add --no-cache \
@@ -17,7 +17,7 @@ RUN echo "https://dl-cdn.alpinelinux.org/alpine/v3.19/community" >> /etc/apk/rep
 
 RUN mkdir -p /opt/base-image \
     && curl -fsSL -o /opt/base-image/base.qcow2 \
-        "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
+        "https://download.fedoraproject.org/pub/fedora/linux/releases/44/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-44-1.7.x86_64.qcow2"
 
 RUN (addgroup kvm 2>/dev/null || true) \
     && adduser -D -s /bin/bash container \

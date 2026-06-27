@@ -1,6 +1,6 @@
 FROM alpine:3.19
 
-ENV CLOUD_OS_FAMILY=debian
+ENV CLOUD_OS_FAMILY=arch
 
 RUN echo "https://dl-cdn.alpinelinux.org/alpine/v3.19/community" >> /etc/apk/repositories \
     && apk add --no-cache \
@@ -17,7 +17,7 @@ RUN echo "https://dl-cdn.alpinelinux.org/alpine/v3.19/community" >> /etc/apk/rep
 
 RUN mkdir -p /opt/base-image \
     && curl -fsSL -o /opt/base-image/base.qcow2 \
-        "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
+        "https://geo.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2"
 
 RUN (addgroup kvm 2>/dev/null || true) \
     && adduser -D -s /bin/bash container \
