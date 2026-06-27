@@ -117,7 +117,7 @@ Configure RAM, CPU, and disk via the egg variables. Start the server — the VM 
 | `rdp` | RDP on port 3389 — **cloud-init images only**, logs in as the `aerovm` user |
 | `none` | Headless — no display output |
 
-On a cloud-init image, choosing `vnc`/`novnc`/`spice`/`rdp` makes cloud-init install a lightweight XFCE desktop (and xrdp, for `rdp`) on first boot — this adds a few minutes before the desktop is usable. On blank-disk images, `vnc`/`novnc`/`spice` just show the VM's console/installer screen (no OS to provision yet), and `rdp` isn't available.
+On a cloud-init image, choosing `vnc`/`novnc`/`spice`/`rdp` makes cloud-init install a lightweight XFCE desktop (and xrdp, for `rdp`) on first boot — this adds a few minutes before the desktop is usable. A dedicated `aerovm` sudo user (password: `OS_PASSWORD`) is created for the desktop session — `vnc`/`novnc`/`spice` auto-login as `aerovm`, and `rdp` prompts for it at connection time. On blank-disk images, `vnc`/`novnc`/`spice` just show the VM's console/installer screen (no OS to provision yet), and `rdp` isn't available.
 
 > **Note:** `vnc`/`spice` (port `5900`), `novnc` (port `6080`), and `rdp` (port `3389`) all need their port assigned as an **Allocation** in the Pterodactyl panel, the same as `ADDITIONAL_PORTS` — QEMU listening on the port isn't enough if Docker/Wings hasn't also exposed it.
 
