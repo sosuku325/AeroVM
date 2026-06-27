@@ -38,6 +38,14 @@ jobs:
             dockerfile: docker/Dockerfile.guest-ubuntu-22.04
           - tag: guest-ubuntu-24.04
             dockerfile: docker/Dockerfile.guest-ubuntu-24.04
+          - tag: guest-fedora
+            dockerfile: docker/Dockerfile.guest-fedora
+          - tag: guest-arch
+            dockerfile: docker/Dockerfile.guest-arch
+          - tag: guest-rockylinux
+            dockerfile: docker/Dockerfile.guest-rockylinux
+          - tag: guest-almalinux
+            dockerfile: docker/Dockerfile.guest-almalinux
 
     steps:
       - name: Checkout
