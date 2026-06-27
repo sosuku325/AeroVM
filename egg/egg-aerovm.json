@@ -16,7 +16,11 @@
         "Ubuntu 26.04 LTS (blank disk)": "ghcr.io/sosuku325/aerovm:ubuntu-26.04",
         "Debian 12 (cloud-init)": "ghcr.io/sosuku325/aerovm:guest-debian-12",
         "Ubuntu 22.04 (cloud-init)": "ghcr.io/sosuku325/aerovm:guest-ubuntu-22.04",
-        "Ubuntu 24.04 (cloud-init)": "ghcr.io/sosuku325/aerovm:guest-ubuntu-24.04"
+        "Ubuntu 24.04 (cloud-init)": "ghcr.io/sosuku325/aerovm:guest-ubuntu-24.04",
+        "Fedora (cloud-init)": "ghcr.io/sosuku325/aerovm:guest-fedora",
+        "Arch Linux (cloud-init)": "ghcr.io/sosuku325/aerovm:guest-arch",
+        "Rocky Linux (cloud-init)": "ghcr.io/sosuku325/aerovm:guest-rockylinux",
+        "AlmaLinux (cloud-init)": "ghcr.io/sosuku325/aerovm:guest-almalinux"
     },
     "file_denylist": [],
     "startup": "/start.sh",
@@ -66,12 +70,12 @@
         },
         {
             "name": "Display Mode",
-            "description": "How to access the VM. ssh: console via Pterodactyl port. vnc: raw VNC. novnc: browser-based VNC. none: headless.",
+            "description": "How to access the VM. ssh: console via Pterodactyl port. vnc: raw VNC. novnc: browser-based VNC. spice: SPICE protocol. rdp: RDP (cloud-init images only). none: headless. vnc/novnc/spice/rdp on a cloud-init image automatically install a desktop environment on first boot.",
             "env_variable": "DISPLAY_MODE",
             "default_value": "ssh",
             "user_viewable": true,
             "user_editable": true,
-            "rules": "required|string|in:ssh,vnc,novnc,none",
+            "rules": "required|string|in:ssh,vnc,novnc,spice,rdp,none",
             "field_type": "text"
         },
         {
@@ -96,7 +100,7 @@
         },
         {
             "name": "Hostname",
-            "description": "Hostname for the guest OS. Only used by cloud-init images (Debian/Ubuntu cloud-init). Letters, numbers, and hyphens, up to 63 characters.",
+            "description": "Hostname for the guest OS. Only used by cloud-init images. Letters, numbers, and hyphens, up to 63 characters.",
             "env_variable": "OS_HOSTNAME",
             "default_value": "aerovm",
             "user_viewable": true,
@@ -132,6 +136,46 @@
             "user_viewable": true,
             "user_editable": true,
             "rules": "required|boolean",
+            "field_type": "text"
+        },
+        {
+            "name": "IPv4 Port Forwarding",
+            "description": "disabled: only the primary SSH port is forwarded, Additional Ports is ignored. user: forward Additional Ports (default). all: also forward ports 1-1024; can noticeably slow down VM startup.",
+            "env_variable": "IPV4_MODE",
+            "default_value": "user",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|in:disabled,user,all",
+            "field_type": "text"
+        },
+        {
+            "name": "Overwrite Host",
+            "description": "Overwrite the host/product name shown inside the VM (e.g. in neofetch, dmidecode). Leave blank to show QEMU's default. Must not contain commas or quotes.",
+            "env_variable": "OVERWRITE_HOST",
+            "default_value": "",
+            "user_viewable": false,
+            "user_editable": false,
+            "rules": "nullable|string",
+            "field_type": "text"
+        },
+        {
+            "name": "Overwrite IP",
+            "description": "Overwrite the host/IP shown in the vnc/novnc/spice/rdp connection info printed at startup. Useful when running behind a tunnel or reverse proxy.",
+            "env_variable": "OVERWRITE_IP",
+            "default_value": "",
+            "user_viewable": false,
+            "user_editable": false,
+            "rules": "nullable|string",
+            "field_type": "text"
+        },
+        {
+            "name": "Banner",
+            "description": "Custom banner printed before the VM starts. Supports newlines (\\n) and Bash color codes.",
+            "env_variable": "BANNER",
+            "default_value": "",
+            "user_viewable": false,
+            "user_editable": false,
+            "rules": "nullable|string",
             "field_type": "text"
         }
     ]
