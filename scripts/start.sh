@@ -51,7 +51,7 @@ esac
 QEMU_ACCEL=()
 AIO_MODE="threads"
 
-if [ -r /dev/kvm ]; then
+if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
     QEMU_ACCEL=(-enable-kvm -cpu host)
     AIO_MODE="native"
     echo "INFO: KVM enabled"
@@ -104,11 +104,28 @@ NETDEV_OPTS=(-netdev "user,id=net0$(build_hostfwd)" -device virtio-net-pci,netde
 
 NOVNC_PORT=6080
 NOVNC_PID=""
+NOVNC_LOG="/home/container/.novnc.log"
 
 cleanup() {
     [ -n "$NOVNC_PID" ] && kill "$NOVNC_PID" 2>/dev/null || true
 }
 trap cleanup EXIT
+
+start_novnc() {
+    local novnc_bin=""
+    for bin in novnc_server \
+               /usr/share/novnc/utils/novnc_proxy \
+               /usr/share/novnc/utils/launch.sh; do
+        if command -v "$bin" &>/dev/null || [ -x "$bin" ]; then
+            novnc_bin="$bin"
+            break
+        fi
+    done
+    [ -z "$novnc_bin" ] && { echo "ERROR: noVNC binary not found" >&2; exit 1; }
+
+    "$novnc_bin" --listen "$NOVNC_PORT" --vnc localhost:5900 >"$NOVNC_LOG" 2>&1 &
+    NOVNC_PID=$!
+}
 
 build_display_opts() {
     case "$DISPLAY_MODE" in
@@ -119,15 +136,6 @@ build_display_opts() {
             echo "-display vnc=:0 -vga virtio"
             ;;
         novnc)
-            local novnc_bin=""
-            for bin in novnc_server \
-                       /usr/share/novnc/utils/novnc_proxy \
-                       /usr/share/novnc/utils/launch.sh; do
-                [ -x "$bin" ] && { novnc_bin="$bin"; break; }
-            done
-            [ -z "$novnc_bin" ] && { echo "ERROR: noVNC binary not found" >&2; exit 1; }
-            "$novnc_bin" --listen "$NOVNC_PORT" --vnc localhost:5900 &
-            NOVNC_PID=$!
             echo "-display vnc=:0 -vga virtio"
             ;;
         none)
@@ -135,6 +143,8 @@ build_display_opts() {
             ;;
     esac
 }
+
+[ "$DISPLAY_MODE" = "novnc" ] && start_novnc
 
 read -ra DISPLAY_OPTS <<< "$(build_display_opts)"
 

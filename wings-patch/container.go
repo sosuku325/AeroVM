@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"emperror.dev/errors"
@@ -194,6 +195,7 @@ func (e *Environment) Create() error {
 		DNS:            cfg.Docker.Network.Dns,
 		LogConfig:      cfg.Docker.ContainerLogConfig(),
 		Devices:        hostDevices(),
+		GroupAdd:       hostDeviceGroups(),
 		SecurityOpt:    []string{"no-new-privileges"},
 		ReadonlyRootfs: true,
 		CapDrop: []string{
@@ -223,6 +225,22 @@ func hostDevices() []container.DeviceMapping {
 		}
 	}
 	return devices
+}
+
+// hostDeviceGroups returns the GID that owns /dev/kvm on the host, added via
+// Docker's GroupAdd so the container's process can open the device even
+// though Wings starts containers with an explicit numeric uid:gid (which
+// bypasses the container image's own /etc/group membership lookups).
+func hostDeviceGroups() []string {
+	info, err := os.Stat("/dev/kvm")
+	if err != nil {
+		return nil
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return nil
+	}
+	return []string{strconv.FormatUint(uint64(stat.Gid), 10)}
 }
 
 func (e *Environment) Destroy() error {

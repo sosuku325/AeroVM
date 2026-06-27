@@ -135,10 +135,11 @@ build_patched_wings() {
 
 set_kvm_permissions() {
     if [ -e /dev/kvm ]; then
+        chgrp kvm /dev/kvm 2>/dev/null || true
         chmod 660 /dev/kvm
 
         if ! grep -q 'KERNEL=="kvm"' /etc/udev/rules.d/99-aerovm-kvm.rules 2>/dev/null; then
-            echo 'KERNEL=="kvm", MODE="0660"' > /etc/udev/rules.d/99-aerovm-kvm.rules
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0660"' > /etc/udev/rules.d/99-aerovm-kvm.rules
             udevadm control --reload-rules
             echo "INFO: KVM udev rules installed"
         fi

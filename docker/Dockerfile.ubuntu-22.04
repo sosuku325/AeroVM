@@ -12,7 +12,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd -f -g 103 kvm \
-    && useradd -m -u 1000 -s /bin/bash container \
+    && useradd -m -s /bin/bash container \
     && usermod -aG kvm container
 
 COPY scripts/start.sh /start.sh
