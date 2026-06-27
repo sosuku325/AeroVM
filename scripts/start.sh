@@ -305,11 +305,11 @@ build_hostfwd() {
                 echo "WARNING: Skipping invalid port mapping: '$mapping'" >&2
                 continue
             fi
-            if [ "$host_p" -gt 65535 ] || [ "$guest_p" -gt 65535 ]; then
+            if [ "$host_p" -lt 1 ] || [ "$host_p" -gt 65535 ] || [ "$guest_p" -lt 1 ] || [ "$guest_p" -gt 65535 ]; then
                 echo "WARNING: Skipping out-of-range port mapping: '$mapping'" >&2
                 continue
             fi
-            add_fwd "$host_p" "$guest_p"
+            add_fwd "$((10#$host_p))" "$((10#$guest_p))"
         done <<< "$(echo "$ADDITIONAL_PORTS" | tr ', ;' '\n')"
     fi
 
