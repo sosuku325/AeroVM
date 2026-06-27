@@ -86,6 +86,21 @@ if [ "$DISPLAY_MODE" = "rdp" ] && [ "$CLOUD_INIT_MODE" -ne 1 ]; then
     exit 1
 fi
 
+needs_desktop=0
+case "$DISPLAY_MODE" in
+    vnc|novnc|spice|rdp) [ "$CLOUD_INIT_MODE" -eq 1 ] && needs_desktop=1 ;;
+esac
+
+if [ "$needs_desktop" -eq 1 ]; then
+    case "$CLOUD_OS_FAMILY" in
+        debian|fedora|rhel|arch) ;;
+        *)
+            echo "ERROR: DISPLAY_MODE=${DISPLAY_MODE} needs a desktop environment, but this image has no recognized CLOUD_OS_FAMILY ('${CLOUD_OS_FAMILY}')" >&2
+            exit 1
+            ;;
+    esac
+fi
+
 
 
 QEMU_ACCEL=()
@@ -125,11 +140,6 @@ if [ ! -f "$DISK_IMAGE" ]; then
     fi
 fi
 
-needs_desktop=0
-case "$DISPLAY_MODE" in
-    vnc|novnc|spice|rdp) [ "$CLOUD_INIT_MODE" -eq 1 ] && needs_desktop=1 ;;
-esac
-
 build_desktop_runcmd() {
     case "$CLOUD_OS_FAMILY" in
         debian)
@@ -150,7 +160,8 @@ build_desktop_runcmd() {
             fi
             ;;
         rhel)
-            echo "  - dnf install -y epel-release"
+            echo "  - dnf install -y dnf-plugins-core epel-release"
+            echo "  - dnf config-manager --set-enabled crb"
             echo "  - dnf install -y xfce4-session lightdm"
             [ "$DISPLAY_MODE" = "spice" ] && echo "  - dnf install -y spice-vdagent"
             if [ "$DISPLAY_MODE" = "rdp" ]; then
@@ -159,15 +170,12 @@ build_desktop_runcmd() {
             fi
             ;;
         arch)
-            echo "  - pacman -Sy --noconfirm xfce4 lightdm lightdm-gtk-greeter"
-            [ "$DISPLAY_MODE" = "spice" ] && echo "  - pacman -Sy --noconfirm spice-vdagent"
+            echo "  - pacman -Syu --noconfirm xfce4 lightdm lightdm-gtk-greeter"
+            [ "$DISPLAY_MODE" = "spice" ] && echo "  - pacman -S --noconfirm spice-vdagent"
             if [ "$DISPLAY_MODE" = "rdp" ]; then
-                echo "  - pacman -Sy --noconfirm xrdp"
+                echo "  - pacman -S --noconfirm xrdp"
                 echo "  - systemctl enable --now xrdp"
             fi
-            ;;
-        *)
-            echo "  - true # WARNING: unknown CLOUD_OS_FAMILY, desktop packages not installed" 1>&2
             ;;
     esac
 
@@ -256,44 +264,54 @@ fi
 
 
 build_hostfwd() {
-    local result=",hostfwd=tcp::${SERVER_PORT}-:22"
+    local result=""
+    declare -A seen_host_ports=()
+
+    add_fwd() {
+        local host_p="$1" guest_p="$2"
+        if [ -n "${seen_host_ports[$host_p]:-}" ]; then
+            echo "WARNING: Skipping duplicate host port forward: ${host_p} (already forwarded to guest port ${seen_host_ports[$host_p]})" >&2
+            return
+        fi
+        seen_host_ports[$host_p]="$guest_p"
+        result="${result},hostfwd=tcp::${host_p}-:${guest_p}"
+    }
+
+    add_fwd "$SERVER_PORT" 22
 
     if [ "$DISPLAY_MODE" = "rdp" ]; then
-        result="${result},hostfwd=tcp::3389-:3389"
+        add_fwd 3389 3389
     fi
 
     if [ "$IPV4_MODE" = "all" ]; then
         echo "INFO: IPV4_MODE=all forwards ports 1-1024; this can noticeably slow down VM startup" >&2
         local p
         for ((p = 1; p <= 1024; p++)); do
-            result="${result},hostfwd=tcp::${p}-:${p}"
+            add_fwd "$p" "$p"
         done
     fi
 
-    if [ "$IPV4_MODE" = "disabled" ] || [ -z "$ADDITIONAL_PORTS" ]; then
-        echo "$result"
-        return
+    if [ "$IPV4_MODE" != "disabled" ] && [ -n "$ADDITIONAL_PORTS" ]; then
+        local mapping host_p guest_p
+        while IFS= read -r mapping; do
+            [[ -z "$mapping" ]] && continue
+            if [[ "$mapping" =~ ^([0-9]{1,5})-([0-9]{1,5})$ ]]; then
+                host_p="${BASH_REMATCH[1]}"
+                guest_p="${BASH_REMATCH[2]}"
+            elif [[ "$mapping" =~ ^([0-9]{1,5})$ ]]; then
+                host_p="${BASH_REMATCH[1]}"
+                guest_p="$host_p"
+            else
+                echo "WARNING: Skipping invalid port mapping: '$mapping'" >&2
+                continue
+            fi
+            if [ "$host_p" -gt 65535 ] || [ "$guest_p" -gt 65535 ]; then
+                echo "WARNING: Skipping out-of-range port mapping: '$mapping'" >&2
+                continue
+            fi
+            add_fwd "$host_p" "$guest_p"
+        done <<< "$(echo "$ADDITIONAL_PORTS" | tr ', ;' '\n')"
     fi
-
-    local mapping host_p guest_p
-    while IFS= read -r mapping; do
-        [[ -z "$mapping" ]] && continue
-        if [[ "$mapping" =~ ^([0-9]{1,5})-([0-9]{1,5})$ ]]; then
-            host_p="${BASH_REMATCH[1]}"
-            guest_p="${BASH_REMATCH[2]}"
-        elif [[ "$mapping" =~ ^([0-9]{1,5})$ ]]; then
-            host_p="${BASH_REMATCH[1]}"
-            guest_p="$host_p"
-        else
-            echo "WARNING: Skipping invalid port mapping: '$mapping'" >&2
-            continue
-        fi
-        if [ "$host_p" -gt 65535 ] || [ "$guest_p" -gt 65535 ]; then
-            echo "WARNING: Skipping out-of-range port mapping: '$mapping'" >&2
-            continue
-        fi
-        result="${result},hostfwd=tcp::${host_p}-:${guest_p}"
-    done <<< "$(echo "$ADDITIONAL_PORTS" | tr ', ;' '\n')"
 
     echo "$result"
 }
@@ -344,7 +362,7 @@ build_display_opts() {
     esac
 }
 
-display_host_ref="${OVERWRITE_IP:-$(hostname)}"
+display_host_ref="${OVERWRITE_IP:-${SERVER_IP:-$(hostname)}}"
 case "$DISPLAY_MODE" in
     novnc) echo "INFO: noVNC will be available at http://${display_host_ref}:${NOVNC_PORT}/vnc.html" ;;
     vnc|spice) echo "INFO: ${DISPLAY_MODE} will be available at ${display_host_ref}:5900" ;;
