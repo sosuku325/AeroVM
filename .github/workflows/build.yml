@@ -25,6 +25,12 @@ jobs:
         include:
           - tag: alpine
             dockerfile: docker/Dockerfile.alpine
+          - tag: ubuntu-22.04
+            dockerfile: docker/Dockerfile.ubuntu-22.04
+          - tag: ubuntu-24.04
+            dockerfile: docker/Dockerfile.ubuntu-24.04
+          - tag: ubuntu-26.04
+            dockerfile: docker/Dockerfile.ubuntu-26.04
 
     steps:
       - name: Checkout

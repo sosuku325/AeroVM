@@ -10,7 +10,10 @@
     "description": "Lightweight QEMU-based VM for Pterodactyl. Free and open source.",
     "features": null,
     "docker_images": {
-        "Alpine": "ghcr.io/sosuku325/aerovm:alpine"
+        "Alpine": "ghcr.io/sosuku325/aerovm:alpine",
+        "Ubuntu 22.04 LTS": "ghcr.io/sosuku325/aerovm:ubuntu-22.04",
+        "Ubuntu 24.04 LTS": "ghcr.io/sosuku325/aerovm:ubuntu-24.04",
+        "Ubuntu 26.04 LTS": "ghcr.io/sosuku325/aerovm:ubuntu-26.04"
     },
     "file_denylist": [],
     "startup": "/start.sh",

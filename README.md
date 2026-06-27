@@ -28,7 +28,7 @@ Works without KVM. Faster with KVM.
 | Component | Minimum |
 |-----------|---------|
 | Pterodactyl Panel | 1.11.x |
-| Wings | v1.11.9 |
+| Wings | v1.11.9+ |
 | Docker | 20.x+ |
 | Host OS | Linux (KVM-capable for acceleration) |
 
@@ -52,16 +52,16 @@ Create a new server using the AeroVM egg. Configure RAM, CPU, and disk via the e
 
 Without KVM, AeroVM runs in software emulation mode. This works but is slower. Applying the Wings KVM patch enables hardware acceleration.
 
-**Prerequisites:** Go >= 1.21, Wings v1.11.9, root access
+**Prerequisites:** Go >= 1.21, Wings v1.11.9 or newer, root access
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/sosuku325/aerovm/main/wings-patch/install.sh)
 ```
 
 The script will:
-1. Verify Wings v1.11.9 is installed
+1. Detect the installed Wings version (v1.11.9+ supported)
 2. Stop Wings
-3. Clone Wings source and replace `container.go` with the KVM-patched version
+3. Clone the matching Wings source tag and replace `container.go` with the KVM-patched version for that Wings release (`container.go` for v1.12+, `container_legacy.go` for v1.11.x — Wings v1.12 changed its pinned Docker SDK, which moved several option types into new packages)
 4. Build and install the patched binary
 5. Set `/dev/kvm` permissions persistently
 6. Restart Wings
@@ -104,12 +104,16 @@ AeroVM/
 ├── egg/
 │   └── egg-aerovm.json       # Pterodactyl egg (user-facing)
 ├── docker/
-│   └── Dockerfile.alpine     # Docker image definition
+│   ├── Dockerfile.alpine        # Alpine-based image (smallest)
+│   ├── Dockerfile.ubuntu-22.04  # Ubuntu 22.04 LTS image
+│   ├── Dockerfile.ubuntu-24.04  # Ubuntu 24.04 LTS image
+│   └── Dockerfile.ubuntu-26.04  # Ubuntu 26.04 LTS image
 ├── scripts/
 │   └── start.sh              # VM startup script
 ├── wings-patch/
-│   ├── container.go          # Patched Wings file (KVM support)
-│   └── install.sh            # One-command KVM patch installer
+│   ├── container.go          # Patched Wings file (KVM support), for Wings v1.12+
+│   ├── container_legacy.go   # Patched Wings file (KVM support), for Wings v1.11.x
+│   └── install.sh            # One-command KVM patch installer (auto-detects Wings version)
 └── .github/workflows/
     └── build.yml             # Auto-build and push to ghcr.io
 ```

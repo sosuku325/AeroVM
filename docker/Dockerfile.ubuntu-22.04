@@ -1,0 +1,24 @@
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        qemu-system-x86 \
+        qemu-utils \
+        ovmf \
+        bash \
+        novnc \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd -f -g 103 kvm \
+    && useradd -m -u 1000 -s /bin/bash container \
+    && usermod -aG kvm container
+
+COPY scripts/start.sh /start.sh
+RUN chmod +x /start.sh
+
+USER container
+WORKDIR /home/container
+
+CMD ["/start.sh"]

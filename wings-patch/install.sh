@@ -5,8 +5,15 @@ WINGS_BIN="/usr/local/bin/wings"
 WINGS_SERVICE="wings"
 WINGS_REPO="https://github.com/pterodactyl/wings"
 CONTAINER_GO_URL="https://raw.githubusercontent.com/sosuku325/aerovm/main/wings-patch/container.go"
+CONTAINER_GO_LEGACY_URL="https://raw.githubusercontent.com/sosuku325/aerovm/main/wings-patch/container_legacy.go"
 GO_MIN_VERSION="1.21"
-SUPPORTED_WINGS_VERSION="v1.11.9"
+MIN_SUPPORTED_WINGS_VERSION="v1.11.9"
+
+# Wings v1.12.0 switched its pinned docker/docker SDK from v25 to v28, which
+# moved several option types (e.g. image.PullOptions, network.InspectOptions)
+# into new subpackages. container.go targets the new SDK; container_legacy.go
+# targets v1.11.x, which still uses the old "api/types" option types.
+LEGACY_MINOR_VERSION="11"
 
 require_root() {
     if [ "$(id -u)" -ne 0 ]; then
@@ -45,6 +52,9 @@ check_go() {
     echo "INFO: Go ${version} found"
 }
 
+WINGS_VERSION=""
+CONTAINER_GO_SELECTED_URL=""
+
 check_wings_version() {
     if [ ! -f "$WINGS_BIN" ]; then
         echo "ERROR: Wings binary not found at ${WINGS_BIN}" >&2
@@ -52,21 +62,32 @@ check_wings_version() {
         exit 1
     fi
 
-    local installed_version
-    installed_version=$("$WINGS_BIN" --version 2>/dev/null | grep -oP 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
+    WINGS_VERSION=$("$WINGS_BIN" --version 2>/dev/null | grep -oP 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
 
-    if [ -z "$installed_version" ]; then
+    if [ -z "$WINGS_VERSION" ]; then
         echo "ERROR: Could not determine Wings version" >&2
         exit 1
     fi
 
-    echo "INFO: Wings version: ${installed_version}"
+    echo "INFO: Wings version: ${WINGS_VERSION}"
 
-    if [ "$installed_version" != "$SUPPORTED_WINGS_VERSION" ]; then
-        echo "ERROR: Unsupported Wings version: ${installed_version}" >&2
-        echo "       AeroVM supports Wings ${SUPPORTED_WINGS_VERSION} only" >&2
-        echo "       Upgrade or downgrade Wings before applying this patch" >&2
+    local major minor
+    major=$(echo "$WINGS_VERSION" | grep -oP '(?<=v)[0-9]+' )
+    minor=$(echo "$WINGS_VERSION" | cut -d. -f2)
+
+    if [ "$major" -lt 1 ] || { [ "$major" -eq 1 ] && [ "$minor" -lt "$LEGACY_MINOR_VERSION" ]; }; then
+        echo "ERROR: Unsupported Wings version: ${WINGS_VERSION}" >&2
+        echo "       AeroVM supports Wings >= ${MIN_SUPPORTED_WINGS_VERSION}" >&2
+        echo "       Upgrade Wings before applying this patch" >&2
         exit 1
+    fi
+
+    if [ "$major" -eq 1 ] && [ "$minor" -eq "$LEGACY_MINOR_VERSION" ]; then
+        echo "INFO: Wings v1.${LEGACY_MINOR_VERSION}.x detected, using legacy docker SDK patch"
+        CONTAINER_GO_SELECTED_URL="$CONTAINER_GO_LEGACY_URL"
+    else
+        echo "INFO: Wings v1.$((LEGACY_MINOR_VERSION + 1))+ detected, using current docker SDK patch"
+        CONTAINER_GO_SELECTED_URL="$CONTAINER_GO_URL"
     fi
 
     echo "INFO: Wings version check passed"
@@ -97,11 +118,11 @@ build_patched_wings() {
     workdir=$(mktemp -d)
     trap "rm -rf $workdir" EXIT
 
-    echo "INFO: Cloning Wings ${SUPPORTED_WINGS_VERSION}..."
-    git clone --depth=1 --branch "$SUPPORTED_WINGS_VERSION" "$WINGS_REPO" "$workdir/wings"
+    echo "INFO: Cloning Wings ${WINGS_VERSION}..."
+    git clone --depth=1 --branch "$WINGS_VERSION" "$WINGS_REPO" "$workdir/wings"
 
     echo "INFO: Downloading patched container.go..."
-    curl -fsSL "$CONTAINER_GO_URL" -o "$workdir/wings/environment/docker/container.go"
+    curl -fsSL "$CONTAINER_GO_SELECTED_URL" -o "$workdir/wings/environment/docker/container.go"
 
     echo "INFO: Building Wings..."
     (cd "$workdir/wings" && go build -o wings .)
