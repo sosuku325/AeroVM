@@ -5,12 +5,13 @@
 [![License](https://img.shields.io/github/license/sosuku325/aerovm?style=for-the-badge)](LICENSE)
 [![GitHub Stars](https://img.shields.io/github/stars/sosuku325/aerovm?style=for-the-badge)](https://github.com/sosuku325/aerovm/stargazers)
 [![GitHub Issues](https://img.shields.io/github/issues/sosuku325/aerovm?style=for-the-badge)](https://github.com/sosuku325/aerovm/issues)
+[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/UaP8DpsDEK)
 
 **Lightweight, free, open-source QEMU-based VM egg for Pterodactyl**
 
 Works without KVM. Faster with KVM.
 
-[Quick Start](#quick-start) • [Variables](#egg-variables) • [Contributing](#contributing)
+[Quick Start](#quick-start) • [Variables](#egg-variables) • [Support](#support) • [Contributing](#contributing)
 
 </div>
 
@@ -132,6 +133,10 @@ AeroVM/
 └── .github/workflows/
     └── build.yml             # Auto-build and push to ghcr.io
 ```
+
+## Support
+
+Questions, help, or feedback? Join the Discord: https://discord.gg/UaP8DpsDEK
 
 ## Contributing
 
