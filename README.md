@@ -10,7 +10,7 @@
 
 Works without KVM. Faster with KVM.
 
-[Quick Start](#quick-start) • [KVM Setup](#kvm-setup-optional) • [Variables](#egg-variables) • [Contributing](#contributing)
+[Quick Start](#quick-start) • [Variables](#egg-variables) • [Contributing](#contributing)
 
 </div>
 
@@ -34,23 +34,9 @@ Works without KVM. Faster with KVM.
 
 ## Quick Start
 
-**1. Download the egg**
+**1. (Optional, recommended) Enable KVM on the node**
 
-Download [`egg-aerovm.json`](egg/egg-aerovm.json) from this repository.
-
-**2. Import to Pterodactyl**
-
-Navigate to **Admin → Nests → Import Egg** and upload the file.
-
-**3. Create a server**
-
-Create a new server using the AeroVM egg. Configure RAM, CPU, and disk via the egg variables. Start the server — the VM will boot automatically.
-
-> **Note:** `ADDITIONAL_PORTS` requires the ports to also be assigned as **Allocations** in the Pterodactyl panel. QEMU-side forwarding alone is not enough; Docker must also expose the port.
-
-## KVM Setup (Optional)
-
-Without KVM, AeroVM runs in software emulation mode. This works but is slower. Applying the Wings KVM patch enables hardware acceleration.
+Run this once on each Wings node, before importing the egg, to get hardware-accelerated VMs. Without it, AeroVM still works, just slower (software emulation).
 
 **Prerequisites:** Go >= 1.21, Wings v1.11.9 or newer, root access
 
@@ -74,6 +60,20 @@ rm /etc/udev/rules.d/99-aerovm-kvm.rules
 udevadm control --reload-rules
 systemctl restart wings
 ```
+
+**2. Download the egg**
+
+Download [`egg-aerovm.json`](egg/egg-aerovm.json) from this repository.
+
+**3. Import to Pterodactyl**
+
+Navigate to **Admin → Nests → Import Egg** and upload the file.
+
+**4. Create a server**
+
+Create a new server using the AeroVM egg. Configure RAM, CPU, and disk via the egg variables. Start the server — the VM will boot automatically, using KVM acceleration if step 1 was applied to that node.
+
+> **Note:** `ADDITIONAL_PORTS` requires the ports to also be assigned as **Allocations** in the Pterodactyl panel. QEMU-side forwarding alone is not enough; Docker must also expose the port.
 
 ## Egg Variables
 
