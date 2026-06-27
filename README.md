@@ -23,7 +23,8 @@ Works without KVM. Faster with KVM.
 - **KVM hybrid** — runs on software emulation by default; hardware acceleration when KVM is available
 - **Lightweight** — optimized QEMU flags, minimal Docker image (Alpine-based)
 - **Pterodactyl native** — one egg import, no panel modifications required
-- **Two ways to provision**: bring your own OS on a blank disk, or pick a cloud-init image (Debian/Ubuntu) that's ready to log into on first boot
+- **Two ways to provision**: bring your own OS on a blank disk, or pick a cloud-init image (Debian, Ubuntu, Fedora, Arch, Rocky, AlmaLinux) that's ready to log into on first boot
+- **SSH, VNC, noVNC, SPICE, or RDP** — cloud-init images can auto-provision a lightweight desktop for the latter four
 
 ## Requirements
 
@@ -76,7 +77,7 @@ Navigate to **Admin → Nests → Import Egg** and upload the file.
 Create a new server using the AeroVM egg, and pick a **Docker Image**:
 
 - **Blank disk** (Alpine, Ubuntu 22.04/24.04/26.04 LTS): an empty disk — you provide the OS yourself (e.g. by uploading a pre-made disk image over SFTP).
-- **Cloud-init** (Debian 12, Ubuntu 22.04, Ubuntu 24.04): the disk is pre-provisioned from the official cloud image and ready to log into on first boot — set `OS_HOSTNAME`/`OS_PASSWORD`/`OS_PUBKEY` to configure it.
+- **Cloud-init** (Debian 12, Ubuntu 22.04, Ubuntu 24.04, Fedora, Arch Linux, Rocky Linux, AlmaLinux): the disk is pre-provisioned from the official cloud image and ready to log into on first boot — set `OS_HOSTNAME`/`OS_PASSWORD`/`OS_PUBKEY` to configure it. Setting `DISPLAY_MODE` to `vnc`/`novnc`/`spice`/`rdp` makes cloud-init install a desktop environment automatically (adds a few minutes to first boot).
 
 Configure RAM, CPU, and disk via the egg variables. Start the server — the VM will boot automatically, using KVM acceleration if step 1 was applied to that node.
 
@@ -89,17 +90,21 @@ Configure RAM, CPU, and disk via the egg variables. Start the server — the VM 
 | `VM_RAM_MB` | RAM allocated to the VM (MB) | `512` |
 | `VM_CPU_CORES` | vCPU cores (max 16) | `1` |
 | `VM_DISK_GB` | Virtual disk size (GB) | `20` |
-| `DISPLAY_MODE` | `ssh` / `vnc` / `novnc` / `none` | `ssh` |
+| `DISPLAY_MODE` | `ssh` / `vnc` / `novnc` / `spice` / `rdp` / `none` | `ssh` |
 | `ADDITIONAL_PORTS` | Extra port forwards (e.g. `8080-80,443`) | — |
 | `UEFI` | Enable UEFI firmware (`0` or `1`) | `0` |
 | `OS_HOSTNAME` | Guest hostname (cloud-init images only) | `aerovm` |
 | `OS_PASSWORD` | Root/SSH password (cloud-init images only). Leave blank to auto-generate one (printed to the console on first boot) | — |
 | `OS_PUBKEY` | SSH public key (cloud-init images only). If set, password SSH login is disabled | — |
 | `PACKAGE_UPDATE` | Update packages on every boot (cloud-init images only, `0` or `1`) | `0` |
+| `IPV4_MODE` | `disabled` (ignore Additional Ports) / `user` (forward Additional Ports) / `all` (also forward ports 1-1024, slower startup) | `user` |
+| `OVERWRITE_HOST` | Overwrite the host/product name shown inside the VM (neofetch, dmidecode, etc.) | — |
+| `OVERWRITE_IP` | Overwrite the host/IP shown in the connection info printed at startup | — |
+| `BANNER` | Custom startup banner (`\n` and Bash color codes supported) | — |
 
 > `VM_RAM_MB` and `VM_CPU_CORES` are independent of Pterodactyl's resource limits. Set them to values your node can actually support.
 >
-> `OS_HOSTNAME`/`OS_PASSWORD`/`OS_PUBKEY`/`PACKAGE_UPDATE` only have an effect on the cloud-init Docker images (Debian/Ubuntu). The blank-disk images (Alpine/Ubuntu LTS) ignore them since there's no OS installed yet to configure.
+> `OS_HOSTNAME`/`OS_PASSWORD`/`OS_PUBKEY`/`PACKAGE_UPDATE` only have an effect on the cloud-init Docker images. The blank-disk images (Alpine/Ubuntu LTS) ignore them since there's no OS installed yet to configure.
 
 ## Display Modes
 
@@ -108,7 +113,11 @@ Configure RAM, CPU, and disk via the egg variables. Start the server — the VM 
 | `ssh` | SSH via the server's primary Pterodactyl port |
 | `vnc` | Raw VNC on port 5900 |
 | `novnc` | Browser-based VNC on port 6080 |
+| `spice` | SPICE protocol on port 5900 (connect with a native SPICE client) |
+| `rdp` | RDP on port 3389 — **cloud-init images only**, logs in as the `aerovm` user |
 | `none` | Headless — no display output |
+
+On a cloud-init image, choosing `vnc`/`novnc`/`spice`/`rdp` makes cloud-init install a lightweight XFCE desktop (and xrdp, for `rdp`) on first boot — this adds a few minutes before the desktop is usable. On blank-disk images, `vnc`/`novnc`/`spice` just show the VM's console/installer screen (no OS to provision yet), and `rdp` isn't available.
 
 ## Project Structure
 
@@ -123,7 +132,11 @@ AeroVM/
 │   ├── Dockerfile.ubuntu-26.04         # Ubuntu 26.04 LTS image, blank disk
 │   ├── Dockerfile.guest-debian-12      # Debian 12 cloud image bundled, cloud-init
 │   ├── Dockerfile.guest-ubuntu-22.04   # Ubuntu 22.04 cloud image bundled, cloud-init
-│   └── Dockerfile.guest-ubuntu-24.04   # Ubuntu 24.04 cloud image bundled, cloud-init
+│   ├── Dockerfile.guest-ubuntu-24.04   # Ubuntu 24.04 cloud image bundled, cloud-init
+│   ├── Dockerfile.guest-fedora         # Fedora Cloud image bundled, cloud-init
+│   ├── Dockerfile.guest-arch           # Arch Linux cloud image bundled, cloud-init
+│   ├── Dockerfile.guest-rockylinux     # Rocky Linux cloud image bundled, cloud-init
+│   └── Dockerfile.guest-almalinux      # AlmaLinux cloud image bundled, cloud-init
 ├── scripts/
 │   └── start.sh              # VM startup script
 ├── wings-patch/
