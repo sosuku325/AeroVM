@@ -36,10 +36,30 @@ check_kvm() {
     fi
 }
 
+# Print copy-pasteable commands to install a new-enough Go, tailored to the CPU
+# architecture and the required version. The distro's packaged Go is often too
+# old (e.g. Ubuntu ships 1.22 while Wings v1.12+ needs 1.24), so this is the most
+# common thing a user has to fix.
+print_go_install_help() {
+    local goarch tarball
+    case "$(uname -m)" in
+        x86_64)  goarch="amd64" ;;
+        aarch64) goarch="arm64" ;;
+        *)       goarch="amd64" ;;  # best-effort default
+    esac
+    tarball="go${GO_MIN_VERSION}.0.linux-${goarch}.tar.gz"
+    echo "       Install Go >= ${GO_MIN_VERSION} (your distro's package is likely too old):" >&2
+    echo "         rm -rf /usr/local/go" >&2
+    echo "         curl -fsSL https://go.dev/dl/${tarball} -o /tmp/go.tar.gz" >&2
+    echo "         tar -C /usr/local -xzf /tmp/go.tar.gz" >&2
+    echo "         export PATH=/usr/local/go/bin:\$PATH" >&2
+    echo "       Then re-run this installer in the same shell. (newer Go is fine too: https://go.dev/dl/)" >&2
+}
+
 check_go() {
     if ! command -v go &>/dev/null; then
-        echo "ERROR: Go is not installed. Install Go >= ${GO_MIN_VERSION}" >&2
-        echo "       https://go.dev/doc/install" >&2
+        echo "ERROR: Go is not installed." >&2
+        print_go_install_help
         exit 1
     fi
 
@@ -53,6 +73,7 @@ check_go() {
 
     if [ "$major" -lt "$req_major" ] || { [ "$major" -eq "$req_major" ] && [ "$minor" -lt "$req_minor" ]; }; then
         echo "ERROR: Go >= ${GO_MIN_VERSION} required, found ${version}" >&2
+        print_go_install_help
         exit 1
     fi
     echo "INFO: Go ${version} found"
