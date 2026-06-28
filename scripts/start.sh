@@ -137,11 +137,17 @@ fi
 
 
 QEMU_ACCEL=()
+
+# Disk I/O is always cache=writeback + aio=threads. aio=native would need
+# cache.direct=on (i.e. cache=none/O_DIRECT), which both conflicts with
+# cache=writeback (QEMU refuses to start) and isn't supported on every node
+# filesystem (e.g. some ZFS setups). threads works everywhere and the big KVM
+# win is CPU virtualization below, not the disk AIO backend.
 AIO_MODE="threads"
+CACHE_MODE="writeback"
 
 if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
     QEMU_ACCEL=(-enable-kvm -cpu host)
-    AIO_MODE="native"
     echo "INFO: KVM enabled"
 else
     QEMU_ACCEL=(-cpu qemu64)
@@ -450,7 +456,7 @@ exec qemu-system-x86_64 \
     "${QEMU_ACCEL[@]}" \
     -m "${VM_RAM_MB}M" \
     -smp "${VM_CPU_CORES}" \
-    -drive "file=${DISK_IMAGE},format=qcow2,if=virtio,cache=writeback,aio=${AIO_MODE}" \
+    -drive "file=${DISK_IMAGE},format=qcow2,if=virtio,cache=${CACHE_MODE},aio=${AIO_MODE}" \
     "${NETDEV_OPTS[@]}" \
     "${DISPLAY_OPTS[@]}" \
     "${UEFI_OPTS[@]}" \
