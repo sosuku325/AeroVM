@@ -1,0 +1,19 @@
+# Force LF for everything in the repo so files committed from Windows
+# (core.autocrlf=true) never end up with CRLF. CRLF in shell scripts breaks
+# them on Linux ("/bin/bash^M: bad interpreter"), and the Docker images / Wings
+# nodes that consume start.sh, install.sh, and the Dockerfiles are all Linux.
+* text=auto eol=lf
+
+*.sh        text eol=lf
+*.go        text eol=lf
+*.json      text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.md        text eol=lf
+Dockerfile* text eol=lf
+
+# Treat disk images and other binaries as binary (never touched).
+*.qcow2 binary
+*.img   binary
+*.iso   binary
+*.fd    binary
