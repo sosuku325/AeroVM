@@ -26,6 +26,15 @@ validate_port() {
     validate_int "$1" "$2" 1 65535
 }
 
+# Pterodactyl's "boolean" rule accepts 1/0/true/false; accept the truthy forms
+# case-insensitively so a panel value of "true" isn't silently treated as off.
+is_truthy() {
+    case "${1,,}" in
+        1|true|yes|on) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 yaml_dquote() {
     printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
@@ -228,7 +237,7 @@ if [ "$CLOUD_INIT_MODE" -eq 1 ]; then
     fi
 
     pkg_update="false"
-    [ "$PACKAGE_UPDATE" = "1" ] && pkg_update="true"
+    is_truthy "$PACKAGE_UPDATE" && pkg_update="true"
 
     pwauth="true"
     root_keys_yaml=""
@@ -413,7 +422,7 @@ read -ra DISPLAY_OPTS <<< "$(build_display_opts)"
 
 
 UEFI_OPTS=()
-if [ "$UEFI" = "1" ]; then
+if is_truthy "$UEFI"; then
     ovmf=""
     for path in /usr/share/ovmf/OVMF.fd \
                 /usr/share/OVMF/OVMF.fd \
