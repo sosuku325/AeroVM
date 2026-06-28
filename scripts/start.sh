@@ -160,6 +160,17 @@ if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
     kvm_usable=1
 fi
 
+# Detect whether the NODE itself is a VM. The container shares the host kernel,
+# so /proc/cpuinfo shows the node's CPU flags; the "hypervisor" flag means the
+# node is virtualized and using KVM here would be *nested* virtualization.
+# Nested KVM (especially on AMD) can kernel-panic the whole node, so in auto
+# mode we fall back to software emulation when nested. KVM=on overrides this for
+# hosts known to support stable nested virt.
+nested_virt=0
+if grep -qw hypervisor /proc/cpuinfo 2>/dev/null; then
+    nested_virt=1
+fi
+
 if [ "$KVM" = "off" ]; then
     QEMU_ACCEL=(-cpu qemu64)
     echo "INFO: KVM disabled (KVM=off), using software emulation"
@@ -170,11 +181,16 @@ elif [ "$KVM" = "on" ]; then
         exit 1
     fi
     QEMU_ACCEL=(-enable-kvm -cpu host)
-    echo "INFO: KVM enabled"
+    echo "INFO: KVM enabled (KVM=on)"
+    [ "$nested_virt" -eq 1 ] && echo "WARNING: node appears virtualized; forced nested KVM (KVM=on) can crash the host if it doesn't support stable nested virtualization"
+elif [ "$kvm_usable" -eq 1 ] && [ "$nested_virt" -eq 1 ]; then
+    # /dev/kvm is available but the node is itself a VM — avoid risking a host
+    # panic from nested KVM. Use software emulation; KVM=on forces KVM.
+    QEMU_ACCEL=(-cpu qemu64)
+    echo "INFO: node is virtualized (nested) — using software emulation to avoid host-crashing nested KVM. Set KVM=on to force KVM if your host supports stable nested virtualization."
 elif [ "$kvm_usable" -eq 1 ]; then
     QEMU_ACCEL=(-enable-kvm -cpu host)
     echo "INFO: KVM enabled"
-    echo "INFO: if your node is itself a VM and this crashes the host, set KVM=off (nested KVM can be unstable)"
 else
     QEMU_ACCEL=(-cpu qemu64)
     echo "INFO: KVM not available, using software emulation"
