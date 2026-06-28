@@ -286,14 +286,30 @@ if [ "$CLOUD_INIT_MODE" -eq 1 ]; then
     password_esc="$(yaml_dquote "$password")"
 
     desktop_users_yaml=""
-    desktop_runcmd_yaml=""
     desktop_chpasswd_yaml=""
     if [ "$needs_desktop" -eq 1 ]; then
         desktop_users_yaml=$'  - name: aerovm\n    lock_passwd: false\n    sudo: ALL=(ALL) NOPASSWD:ALL\n    shell: /bin/bash'
-        desktop_runcmd_yaml=$'runcmd:\n'"$(build_desktop_runcmd)"
         desktop_chpasswd_yaml="    - {name: aerovm, password: \"${password_esc}\", type: text}"
         echo "INFO: DISPLAY_MODE=${DISPLAY_MODE} requires a desktop environment; cloud-init will install it on first boot (may take a few minutes)"
     fi
+
+    # Cloud images ship sshd with PermitRootLogin=prohibit-password, which blocks
+    # logging in as root with a password even when ssh_pwauth is on. When we're
+    # using password auth (no SSH key supplied), drop in a config enabling root
+    # password login and restart sshd. With a key (pwauth=false) the default
+    # prohibit-password already allows key login, so we leave sshd alone.
+    write_files_yaml=""
+    runcmd_body=""
+    if [ "$pwauth" = "true" ]; then
+        write_files_yaml=$'write_files:\n  - path: /etc/ssh/sshd_config.d/99-aerovm.conf\n    content: |\n      PermitRootLogin yes\n      PasswordAuthentication yes'
+        runcmd_body=$'  - sed -i \'s/^#*PermitRootLogin.*/PermitRootLogin yes/\' /etc/ssh/sshd_config\n  - systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null || true'
+    fi
+    if [ "$needs_desktop" -eq 1 ]; then
+        [ -n "$runcmd_body" ] && runcmd_body+=$'\n'
+        runcmd_body+="$(build_desktop_runcmd)"
+    fi
+    runcmd_yaml=""
+    [ -n "$runcmd_body" ] && runcmd_yaml="runcmd:"$'\n'"$runcmd_body"
 
     cat > "${seed_dir}/meta-data" <<EOF
 instance-id: ${instance_id}
@@ -317,7 +333,8 @@ users:
   - name: root
 ${root_keys_yaml}
 ${desktop_users_yaml}
-${desktop_runcmd_yaml}
+${write_files_yaml}
+${runcmd_yaml}
 EOF
 
     xorriso -as mkisofs -output "$SEED_ISO" -volid cidata -joliet -rock \
