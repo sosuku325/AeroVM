@@ -93,15 +93,32 @@ check_wings_version() {
     echo "INFO: Wings version check passed"
 }
 
+WORKDIR=""
+WINGS_WAS_ACTIVE=0
+
+cleanup() {
+    [ -n "$WORKDIR" ] && rm -rf "$WORKDIR"
+    # Safety net: if we stopped Wings and it isn't running again (e.g. the build
+    # or install failed partway), bring it back so a failed patch never leaves
+    # the node's Wings down.
+    if [ "$WINGS_WAS_ACTIVE" -eq 1 ] && ! systemctl is-active --quiet "$WINGS_SERVICE" 2>/dev/null; then
+        echo "INFO: Restarting Wings (recovering from incomplete patch)..." >&2
+        systemctl start "$WINGS_SERVICE" || true
+    fi
+}
+trap cleanup EXIT
+
 stop_wings() {
     if systemctl is-active --quiet "$WINGS_SERVICE" 2>/dev/null; then
+        WINGS_WAS_ACTIVE=1
         echo "INFO: Stopping Wings..."
         systemctl stop "$WINGS_SERVICE"
     fi
 }
 
 start_wings() {
-    if systemctl is-enabled --quiet "$WINGS_SERVICE" 2>/dev/null; then
+    # Restart if it was running before, or if it's enabled to run at boot.
+    if [ "$WINGS_WAS_ACTIVE" -eq 1 ] || systemctl is-enabled --quiet "$WINGS_SERVICE" 2>/dev/null; then
         echo "INFO: Starting Wings..."
         systemctl start "$WINGS_SERVICE"
     fi
@@ -113,24 +130,26 @@ backup_binary() {
     echo "INFO: Backed up existing Wings binary to ${backup}"
 }
 
+# Clone + patch + compile the new binary BEFORE touching the running service,
+# so a build failure aborts with Wings still up and the old binary intact.
 build_patched_wings() {
-    local workdir
-    workdir=$(mktemp -d)
-    trap "rm -rf $workdir" EXIT
+    WORKDIR=$(mktemp -d)
 
     echo "INFO: Cloning Wings ${WINGS_VERSION}..."
-    git clone --depth=1 --branch "$WINGS_VERSION" "$WINGS_REPO" "$workdir/wings"
+    git clone --depth=1 --branch "$WINGS_VERSION" "$WINGS_REPO" "$WORKDIR/wings"
 
     echo "INFO: Downloading patched container.go..."
-    curl -fsSL "$CONTAINER_GO_SELECTED_URL" -o "$workdir/wings/environment/docker/container.go"
+    curl -fsSL "$CONTAINER_GO_SELECTED_URL" -o "$WORKDIR/wings/environment/docker/container.go"
 
     echo "INFO: Building Wings..."
-    (cd "$workdir/wings" && go build -o wings .)
-
-    echo "INFO: Installing patched Wings binary..."
-    install -m 755 "$workdir/wings/wings" "$WINGS_BIN"
+    (cd "$WORKDIR/wings" && go build -o wings .)
 
     echo "INFO: Build complete"
+}
+
+install_patched_wings() {
+    echo "INFO: Installing patched Wings binary..."
+    install -m 755 "$WORKDIR/wings/wings" "$WINGS_BIN"
 }
 
 set_kvm_permissions() {
@@ -151,9 +170,10 @@ main() {
     check_kvm
     check_go
     check_wings_version
+    build_patched_wings
     stop_wings
     backup_binary
-    build_patched_wings
+    install_patched_wings
     set_kvm_permissions
     start_wings
     echo ""
