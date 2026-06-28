@@ -40,9 +40,9 @@
     "variables": [
         {
             "name": "VM RAM (MB)",
-            "description": "Amount of RAM allocated to the VM in MB. Independent of Pterodactyl's memory limit.",
+            "description": "Amount of RAM allocated to the VM in MB. Independent of Pterodactyl's memory limit. Cloud-init (ready-to-use) images need at least 1024 MB; allow 2048+ when the node runs under software emulation, or first boot can time out.",
             "env_variable": "VM_RAM_MB",
-            "default_value": "512",
+            "default_value": "1024",
             "user_viewable": true,
             "user_editable": true,
             "rules": "required|integer|min:128|max:16777216",
@@ -52,7 +52,7 @@
             "name": "VM CPU Cores",
             "description": "Number of vCPU cores allocated to the VM. Keep this at or below the physical core count of the node.",
             "env_variable": "VM_CPU_CORES",
-            "default_value": "1",
+            "default_value": "2",
             "user_viewable": true,
             "user_editable": true,
             "rules": "required|integer|min:1|max:16",
