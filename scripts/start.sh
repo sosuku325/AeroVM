@@ -55,6 +55,7 @@ OVERWRITE_HOST="${OVERWRITE_HOST:-}"
 OVERWRITE_IP="${OVERWRITE_IP:-}"
 BANNER="${BANNER:-}"
 CLOUD_OS_FAMILY="${CLOUD_OS_FAMILY:-}"
+KVM="${KVM:-auto}"
 
 # Maxes keep downstream arithmetic (e.g. disk bytes) well within int64 and
 # reject nonsensical values before they reach QEMU.
@@ -75,6 +76,14 @@ case "$IPV4_MODE" in
     disabled|user|all) ;;
     *)
         echo "ERROR: IPV4_MODE must be one of: disabled, user, all" >&2
+        exit 1
+        ;;
+esac
+
+case "$KVM" in
+    auto|on|off) ;;
+    *)
+        echo "ERROR: KVM must be one of: auto, on, off" >&2
         exit 1
         ;;
 esac
@@ -146,9 +155,26 @@ QEMU_ACCEL=()
 AIO_MODE="threads"
 CACHE_MODE="writeback"
 
+kvm_usable=0
 if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
+    kvm_usable=1
+fi
+
+if [ "$KVM" = "off" ]; then
+    QEMU_ACCEL=(-cpu qemu64)
+    echo "INFO: KVM disabled (KVM=off), using software emulation"
+elif [ "$KVM" = "on" ]; then
+    if [ "$kvm_usable" -ne 1 ]; then
+        echo "ERROR: KVM=on but /dev/kvm is not available/writable in the container" >&2
+        echo "       Apply the Wings KVM patch (wings-patch/install.sh) or set KVM=auto/off" >&2
+        exit 1
+    fi
     QEMU_ACCEL=(-enable-kvm -cpu host)
     echo "INFO: KVM enabled"
+elif [ "$kvm_usable" -eq 1 ]; then
+    QEMU_ACCEL=(-enable-kvm -cpu host)
+    echo "INFO: KVM enabled"
+    echo "INFO: if your node is itself a VM and this crashes the host, set KVM=off (nested KVM can be unstable)"
 else
     QEMU_ACCEL=(-cpu qemu64)
     echo "INFO: KVM not available, using software emulation"
