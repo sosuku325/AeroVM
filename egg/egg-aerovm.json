@@ -79,6 +79,16 @@
             "field_type": "text"
         },
         {
+            "name": "KVM Acceleration",
+            "description": "auto: use hardware KVM if available, else software emulation (default). off: always use software emulation. on: require KVM (fail if unavailable). Set to off if your Pterodactyl node is itself a VM and enabling KVM crashes/panics the node (nested virtualization can be unstable).",
+            "env_variable": "KVM",
+            "default_value": "auto",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|in:auto,on,off",
+            "field_type": "text"
+        },
+        {
             "name": "Additional Ports",
             "description": "Extra ports to forward into the VM. These ports must also be assigned as Allocations in the Pterodactyl panel. Comma-separated. Use hostport-guestport or single port. Example: 8080-80,443",
             "env_variable": "ADDITIONAL_PORTS",
