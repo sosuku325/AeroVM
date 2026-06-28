@@ -280,17 +280,18 @@ if [ "$CLOUD_INIT_MODE" -eq 1 ]; then
 
     seed_dir="$(mktemp -d)"
     hostname_esc="$(yaml_dquote "$OS_HOSTNAME")"
+    # The password is a double-quoted YAML scalar in the chpasswd.users list
+    # below, so it IS yaml-escaped (correct for that context; the parser
+    # un-escapes it back to the literal password).
+    password_esc="$(yaml_dquote "$password")"
 
-    # NOTE: the password goes into a cloud-init chpasswd "list: |" literal block,
-    # where content is taken verbatim — it must NOT be YAML-escaped, or the
-    # escape characters would become part of the actual password.
     desktop_users_yaml=""
     desktop_runcmd_yaml=""
     desktop_chpasswd_yaml=""
     if [ "$needs_desktop" -eq 1 ]; then
         desktop_users_yaml=$'  - name: aerovm\n    lock_passwd: false\n    sudo: ALL=(ALL) NOPASSWD:ALL\n    shell: /bin/bash'
         desktop_runcmd_yaml=$'runcmd:\n'"$(build_desktop_runcmd)"
-        desktop_chpasswd_yaml="    aerovm:${password}"
+        desktop_chpasswd_yaml="    - {name: aerovm, password: \"${password_esc}\", type: text}"
         echo "INFO: DISPLAY_MODE=${DISPLAY_MODE} requires a desktop environment; cloud-init will install it on first boot (may take a few minutes)"
     fi
 
@@ -309,8 +310,8 @@ package_update: ${pkg_update}
 package_upgrade: ${pkg_update}
 chpasswd:
   expire: false
-  list: |
-    root:${password}
+  users:
+    - {name: root, password: "${password_esc}", type: text}
 ${desktop_chpasswd_yaml}
 users:
   - name: root
