@@ -102,7 +102,7 @@ Configure RAM, CPU, and disk via the egg variables. Start the server — the VM 
 | `VM_CPU_CORES` | vCPU cores (max 16) | `1` |
 | `VM_DISK_GB` | Virtual disk size (GB) | `20` |
 | `DISPLAY_MODE` | `ssh` / `vnc` / `novnc` / `spice` / `rdp` / `none` | `ssh` |
-| `KVM` | `auto` (use KVM if available) / `off` (force software emulation) / `on` (require KVM) | `auto` |
+| `KVM` | `auto` (KVM on bare metal; software emulation if the node is itself a VM) / `off` (force software emulation) / `on` (force KVM, even nested) | `auto` |
 | `ADDITIONAL_PORTS` | Extra port forwards (e.g. `8080-80,443`) | — |
 | `UEFI` | Enable UEFI firmware (`0` or `1`) | `0` |
 | `OS_HOSTNAME` | Guest hostname (cloud-init images only) | `aerovm` |
@@ -120,7 +120,7 @@ Configure RAM, CPU, and disk via the egg variables. Start the server — the VM 
 >
 > **Pterodactyl "Disk Space"** (the container disk limit, in MiB) must be larger than `VM_DISK_GB` — the VM's `disk.qcow2` can grow up to `VM_DISK_GB`, and a server is stopped if it exceeds its Pterodactyl disk limit. For `VM_DISK_GB=20`, set Disk Space to ~`25000` MiB or `0` (unlimited).
 
-> ⚠️ **Nested virtualization warning.** If your Pterodactyl **node is itself a virtual machine** (e.g. a VM from another VPS host), enabling hardware KVM inside it means *nested* virtualization. On some hosts (notably certain AMD setups) nested KVM is unstable and can **kernel-panic the whole node**. If applying the KVM patch and booting a VM crashes your node, set the **`KVM` variable to `off`** to force stable software emulation. KVM acceleration is only safe when the node is bare metal or its host explicitly supports stable nested virtualization.
+> ⚠️ **Nested virtualization.** If your Pterodactyl **node is itself a virtual machine** (e.g. a VM from another VPS host), using hardware KVM inside it means *nested* virtualization, which on some hosts (notably certain AMD setups) is unstable and can **kernel-panic the whole node**. AeroVM guards against this: in the default `KVM=auto` mode it detects a virtualized node (via the CPU `hypervisor` flag) and automatically uses **software emulation** there, so it won't crash your node even with the KVM patch applied. Set `KVM=on` only to force nested KVM on a host you know supports it. On bare-metal nodes, `auto` uses KVM normally. Note: software emulation works but is **much slower** — heavy guests like Ubuntu Desktop are impractical without real KVM, so for performance run AeroVM on a bare-metal node.
 
 ## Display Modes
 
