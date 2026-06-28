@@ -21,7 +21,7 @@ Works without KVM. Faster with KVM.
 
 - **Free & open source** — no license keys, no paywalls
 - **KVM hybrid** — runs on software emulation by default; hardware acceleration when KVM is available
-- **Lightweight** — optimized QEMU flags, minimal Docker image (Alpine-based)
+- **Lightweight** — tuned QEMU flags (virtio disk/net, memory balloon); the Alpine blank-disk image is the smallest option
 - **Pterodactyl native** — one egg import, no panel modifications required
 - **Two ways to provision**: bring your own OS on a blank disk, or pick a cloud-init image (Debian, Ubuntu, Fedora, Arch, Rocky, AlmaLinux) that's ready to log into on first boot
 - **SSH, VNC, noVNC, SPICE, or RDP** — cloud-init images can auto-provision a lightweight desktop for the latter four
@@ -31,7 +31,7 @@ Works without KVM. Faster with KVM.
 | Component | Minimum |
 |-----------|---------|
 | Pterodactyl Panel | 1.11.x |
-| Wings | v1.11.9+ |
+| Wings | v1.11.9+ (tested up to v1.13.0) |
 | Docker | 20.x+ |
 | Host OS | Linux (KVM-capable for acceleration) |
 
@@ -41,19 +41,20 @@ Works without KVM. Faster with KVM.
 
 Run this once on each Wings node, before importing the egg, to get hardware-accelerated VMs. Without it, AeroVM still works, just slower (software emulation).
 
-**Prerequisites:** Go >= 1.21, Wings v1.11.9 or newer, root access
+**Prerequisites:** Wings v1.11.9 or newer, Go, and root access. The required Go version depends on the Wings release: **Go 1.21+** for Wings v1.11.x, **Go 1.24+** for v1.12.0 and newer (their `go.mod` requires it). The installer detects this and tells you which it needs.
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/sosuku325/aerovm/main/wings-patch/install.sh)
 ```
 
 The script will:
-1. Detect the installed Wings version (v1.11.9+ supported)
-2. Stop Wings
-3. Clone the matching Wings source tag and replace `container.go` with the KVM-patched version for that Wings release (`container.go` for v1.12+, `container_legacy.go` for v1.11.x — Wings v1.12 changed its pinned Docker SDK, which moved several option types into new packages)
-4. Build and install the patched binary
-5. Set `/dev/kvm` permissions persistently
-6. Restart Wings
+1. Detect the installed Wings version (v1.11.9+ supported) and pick the matching patch + required Go version
+2. Build the patched Wings **before** stopping the service, so a build failure leaves your running Wings untouched
+3. Stop Wings, back up the current binary (`wings.bak.<timestamp>`), and install the patched build
+4. Set `/dev/kvm` permissions persistently (udev rule + group)
+5. Restart Wings (an EXIT-trap safety net restarts it even if a step fails midway)
+
+The patch itself adds a `/dev/kvm` device mapping to every server container and grants the container's process the host's `kvm` group, so guests can use hardware acceleration. `container.go` targets Wings v1.12+ (newer Docker SDK); `container_legacy.go` targets v1.11.x (older SDK) — the installer chooses automatically.
 
 **To revert:**
 ```bash
@@ -121,6 +122,38 @@ On a cloud-init image, choosing `vnc`/`novnc`/`spice`/`rdp` makes cloud-init ins
 
 > **Note:** `vnc`/`spice` (port `5900`), `novnc` (port `6080`), and `rdp` (port `3389`) all need their port assigned as an **Allocation** in the Pterodactyl panel, the same as `ADDITIONAL_PORTS` — QEMU listening on the port isn't enough if Docker/Wings hasn't also exposed it.
 
+## How It Works
+
+The container's entrypoint is [`scripts/start.sh`](scripts/start.sh), which runs every boot and builds the QEMU command line from the egg variables:
+
+1. **Validate inputs** — integers are range-checked (and guarded against int64 overflow), `DISPLAY_MODE`/`IPV4_MODE` are checked against their allowed sets, the hostname against `[a-zA-Z0-9-]{1,63}`, and `OS_PASSWORD`/`OS_PUBKEY` are rejected if they contain newlines (they're embedded into cloud-init YAML).
+2. **Detect KVM** — if `/dev/kvm` is readable *and* writable, QEMU runs with `-enable-kvm -cpu host` and `aio=native`; otherwise it falls back to software emulation (`-cpu qemu64`, `aio=threads`). Either way the VM boots.
+3. **Provision the disk** (`/home/container/disk.qcow2`, persisted across reboots):
+   - *Blank-disk images*: create an empty `qcow2` of `VM_DISK_GB`.
+   - *Cloud-init images*: copy the bundled cloud image (`/opt/base-image/base.qcow2`) and grow it to `VM_DISK_GB` (skipped if that's smaller than the image's own size).
+4. **Build a cloud-init seed** (cloud-init images only) — a NoCloud `cidata` ISO (`meta-data` + `user-data`) is generated with `xorriso` and attached via `-cdrom`. It sets the hostname, the root password (`chpasswd`), an SSH key (if provided), and optional package upgrades. A random instance-id is persisted (`.cloud-init-instance-id`) so cloud-init doesn't re-run on later boots. For a graphical `DISPLAY_MODE` it also creates an `aerovm` sudo user for the desktop session and runs a `runcmd` that installs XFCE + LightDM (plus `spice-vdagent` or `xrdp`) using the package manager for the image's `CLOUD_OS_FAMILY` (`debian`/`fedora`/`rhel`/`arch`).
+5. **Set up networking** — QEMU user-mode networking with `hostfwd` rules: the primary Pterodactyl port → guest `22`, plus RDP `3389` (rdp mode), the `1-1024` range (`IPV4_MODE=all`), and `ADDITIONAL_PORTS`. Ports the display already uses (5900/6080) and duplicates are skipped.
+6. **Pick the display** — `ssh` uses the serial console (`-nographic -serial mon:stdio`); `vnc`/`novnc` use `-vga virtio` on VNC `:0` (5900), with `novnc` also launching a noVNC→VNC proxy on 6080; `spice` uses `-vga qxl` with `-spice`; `rdp`/`none` run headless.
+7. **Launch QEMU** — `exec qemu-system-x86_64` with virtio disk/net, a memory balloon, optional `-bios` (OVMF, when `UEFI` is on), and optional `-smbios` (when `OVERWRITE_HOST` is set).
+
+**KVM on the node (optional patch).** Wings starts each server container with an explicit numeric `uid:gid`, which makes Docker ignore the image's own group memberships — so just adding the container user to a `kvm` group in the Dockerfile isn't enough. The patch in [`wings-patch/`](wings-patch/) makes Wings map `/dev/kvm` into the container and add the host's real `kvm` group GID via Docker's `GroupAdd`, so the guest can actually open the device.
+
+## Images & Versions
+
+All images are published to `ghcr.io/sosuku325/aerovm:<tag>`.
+
+| Tag | Base image | Bundled guest OS |
+|-----|-----------|------------------|
+| `alpine` | Alpine 3.19 | — (blank disk) |
+| `ubuntu-22.04` / `ubuntu-24.04` / `ubuntu-26.04` | Ubuntu LTS | — (blank disk) |
+| `guest-debian-12` | Alpine 3.19 | Debian 12 (bookworm) cloud image |
+| `guest-ubuntu-22.04` / `guest-ubuntu-24.04` | Alpine 3.19 | Ubuntu 22.04 (jammy) / 24.04 (noble) cloud image |
+| `guest-fedora` | Alpine 3.19 | Fedora Cloud Base 44 |
+| `guest-arch` | Alpine 3.19 | Arch Linux (latest cloud image) |
+| `guest-rockylinux` / `guest-almalinux` | Alpine 3.19 | Rocky Linux 9 / AlmaLinux 9 GenericCloud |
+
+Cloud-init images bundle the official upstream `qcow2`/`img` at build time, so no extra download happens when a server is created. Desktop sessions use **XFCE4 + LightDM** (with **xrdp** for RDP, **spice-vdagent** for SPICE).
+
 ## Project Structure
 
 ```
@@ -145,8 +178,9 @@ AeroVM/
 │   ├── container.go          # Patched Wings file (KVM support), for Wings v1.12+
 │   ├── container_legacy.go   # Patched Wings file (KVM support), for Wings v1.11.x
 │   └── install.sh            # One-command KVM patch installer (auto-detects Wings version)
-└── .github/workflows/
-    └── build.yml             # Auto-build and push to ghcr.io
+├── .github/workflows/
+│   └── build.yml             # Auto-build and push all images to ghcr.io
+└── .gitattributes            # Forces LF line endings (CRLF would break the shell scripts on Linux)
 ```
 
 ## Support
