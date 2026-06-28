@@ -98,8 +98,8 @@ Configure RAM, CPU, and disk via the egg variables. Start the server — the VM 
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `VM_RAM_MB` | RAM allocated to the VM (MB) | `512` |
-| `VM_CPU_CORES` | vCPU cores (max 16) | `1` |
+| `VM_RAM_MB` | RAM allocated to the VM (MB). Cloud-init images need ≥ 1024; use 2048+ under software emulation | `1024` |
+| `VM_CPU_CORES` | vCPU cores (max 16). Use 2+ for cloud-init images | `2` |
 | `VM_DISK_GB` | Virtual disk size (GB) | `20` |
 | `DISPLAY_MODE` | `ssh` / `vnc` / `novnc` / `spice` / `rdp` / `none` | `ssh` |
 | `KVM` | `auto` (KVM on bare metal; software emulation if the node is itself a VM) / `off` (force software emulation) / `on` (force KVM, even nested) | `auto` |
@@ -115,6 +115,8 @@ Configure RAM, CPU, and disk via the egg variables. Start the server — the VM 
 | `BANNER` | Custom startup banner (`\n` and Bash color codes supported) | — |
 
 > `VM_RAM_MB` and `VM_CPU_CORES` are independent of Pterodactyl's resource limits. Set them to values your node can actually support.
+>
+> **First boot timing out / dropping to emergency mode?** The ready-to-use cloud-init images boot a full systemd userland and need more than the bare minimum, especially when the node runs the VM under software emulation (`KVM=off`, or `auto` on a nested node). Give the server at least **2048 MB RAM and 2 cores** — a starved VM can miss systemd's 90s device-detection timeout and drop to an emergency shell. On bare-metal nodes with real KVM, 1024 MB / 1 core is usually fine.
 >
 > `OS_HOSTNAME`/`OS_PASSWORD`/`OS_PUBKEY`/`PACKAGE_UPDATE` only have an effect on the cloud-init Docker images. The blank-disk images (Alpine/Ubuntu LTS) ignore them since there's no OS installed yet to configure.
 >
