@@ -43,6 +43,16 @@ Run this once on each Wings node, before importing the egg, to get hardware-acce
 
 **Prerequisites:** Wings v1.11.9 or newer, Go, and root access. The required Go version depends on the Wings release: **Go 1.21+** for Wings v1.11.x, **Go 1.24+** for v1.12.0 and newer (their `go.mod` requires it). The installer detects this and tells you which it needs.
 
+> **Heads-up:** most distros package an older Go than Wings v1.12+ needs (Ubuntu 24, for example, ships Go 1.22). If the installer says your Go is too old, install a current Go and put it first on `PATH`, then re-run in the same shell:
+>
+> ```bash
+> rm -rf /usr/local/go
+> curl -fsSL https://go.dev/dl/go1.24.0.linux-amd64.tar.gz -o /tmp/go.tar.gz   # arm64: swap amd64 -> arm64
+> tar -C /usr/local -xzf /tmp/go.tar.gz
+> export PATH=/usr/local/go/bin:$PATH
+> go version   # should report go1.24.0 (or newer)
+> ```
+
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/sosuku325/aerovm/main/wings-patch/install.sh)
 ```
