@@ -80,7 +80,7 @@
         },
         {
             "name": "KVM Acceleration",
-            "description": "auto: use hardware KVM if available, else software emulation (default). off: always use software emulation. on: require KVM (fail if unavailable). Set to off if your Pterodactyl node is itself a VM and enabling KVM crashes/panics the node (nested virtualization can be unstable).",
+            "description": "auto (default): use hardware KVM on bare-metal nodes; if the node is itself a VM, automatically fall back to software emulation to avoid nested-KVM host panics. off: always software emulation. on: force KVM, required even when nested (only for hosts with stable nested virtualization; can crash the node otherwise).",
             "env_variable": "KVM",
             "default_value": "auto",
             "user_viewable": true,
