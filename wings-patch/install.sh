@@ -6,7 +6,6 @@ WINGS_SERVICE="wings"
 WINGS_REPO="https://github.com/pterodactyl/wings"
 CONTAINER_GO_URL="https://raw.githubusercontent.com/sosuku325/aerovm/main/wings-patch/container.go"
 CONTAINER_GO_LEGACY_URL="https://raw.githubusercontent.com/sosuku325/aerovm/main/wings-patch/container_legacy.go"
-GO_MIN_VERSION="1.21"
 MIN_SUPPORTED_WINGS_VERSION="v1.11.9"
 
 # Wings v1.12.0 switched its pinned docker/docker SDK from v25 to v28, which
@@ -14,6 +13,13 @@ MIN_SUPPORTED_WINGS_VERSION="v1.11.9"
 # into new subpackages. container.go targets the new SDK; container_legacy.go
 # targets v1.11.x, which still uses the old "api/types" option types.
 LEGACY_MINOR_VERSION="11"
+
+# Minimum Go required to compile each Wings line (their go.mod "go" directive):
+# v1.11.x needs Go 1.21, v1.12.0+ bumped it to 1.24. The right minimum is chosen
+# from the detected Wings version in check_wings_version.
+GO_LEGACY_VERSION="1.21"
+GO_CURRENT_VERSION="1.24"
+GO_MIN_VERSION=""
 
 require_root() {
     if [ "$(id -u)" -ne 0 ]; then
@@ -85,12 +91,14 @@ check_wings_version() {
     if [ "$major" -eq 1 ] && [ "$minor" -eq "$LEGACY_MINOR_VERSION" ]; then
         echo "INFO: Wings v1.${LEGACY_MINOR_VERSION}.x detected, using legacy docker SDK patch"
         CONTAINER_GO_SELECTED_URL="$CONTAINER_GO_LEGACY_URL"
+        GO_MIN_VERSION="$GO_LEGACY_VERSION"
     else
         echo "INFO: Wings v1.$((LEGACY_MINOR_VERSION + 1))+ detected, using current docker SDK patch"
         CONTAINER_GO_SELECTED_URL="$CONTAINER_GO_URL"
+        GO_MIN_VERSION="$GO_CURRENT_VERSION"
     fi
 
-    echo "INFO: Wings version check passed"
+    echo "INFO: Wings version check passed (requires Go >= ${GO_MIN_VERSION})"
 }
 
 WORKDIR=""
@@ -168,8 +176,10 @@ set_kvm_permissions() {
 main() {
     require_root
     check_kvm
-    check_go
+    # Detect the Wings version first: it determines which patch to use AND the
+    # minimum Go version required to compile that Wings release.
     check_wings_version
+    check_go
     build_patched_wings
     stop_wings
     backup_binary
