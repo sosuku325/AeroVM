@@ -77,6 +77,20 @@ if [[ "$OVERWRITE_HOST" == *","* ]] || [[ "$OVERWRITE_HOST" == *"\""* ]]; then
     exit 1
 fi
 
+# OS_PASSWORD is written verbatim into a cloud-init chpasswd "user:password"
+# line, which is newline-delimited, so a newline would corrupt the structure.
+if [[ "$OS_PASSWORD" == *$'\n'* ]] || [[ "$OS_PASSWORD" == *$'\r'* ]]; then
+    echo "ERROR: OS_PASSWORD must not contain newline characters" >&2
+    exit 1
+fi
+
+# OS_PUBKEY is embedded in a double-quoted YAML scalar; a newline there would
+# break the document.
+if [[ "$OS_PUBKEY" == *$'\n'* ]] || [[ "$OS_PUBKEY" == *$'\r'* ]]; then
+    echo "ERROR: OS_PUBKEY must not contain newline characters" >&2
+    exit 1
+fi
+
 BASE_IMAGE="/opt/base-image/base.qcow2"
 CLOUD_INIT_MODE=0
 [ -f "$BASE_IMAGE" ] && CLOUD_INIT_MODE=1
@@ -215,15 +229,17 @@ if [ "$CLOUD_INIT_MODE" -eq 1 ]; then
 
     seed_dir="$(mktemp -d)"
     hostname_esc="$(yaml_dquote "$OS_HOSTNAME")"
-    password_esc="$(yaml_dquote "$password")"
 
+    # NOTE: the password goes into a cloud-init chpasswd "list: |" literal block,
+    # where content is taken verbatim — it must NOT be YAML-escaped, or the
+    # escape characters would become part of the actual password.
     desktop_users_yaml=""
     desktop_runcmd_yaml=""
     desktop_chpasswd_yaml=""
     if [ "$needs_desktop" -eq 1 ]; then
         desktop_users_yaml=$'  - name: aerovm\n    lock_passwd: false\n    sudo: ALL=(ALL) NOPASSWD:ALL\n    shell: /bin/bash'
         desktop_runcmd_yaml=$'runcmd:\n'"$(build_desktop_runcmd)"
-        desktop_chpasswd_yaml="    aerovm:${password_esc}"
+        desktop_chpasswd_yaml="    aerovm:${password}"
         echo "INFO: DISPLAY_MODE=${DISPLAY_MODE} requires a desktop environment; cloud-init will install it on first boot (may take a few minutes)"
     fi
 
@@ -243,7 +259,7 @@ package_upgrade: ${pkg_update}
 chpasswd:
   expire: false
   list: |
-    root:${password_esc}
+    root:${password}
 ${desktop_chpasswd_yaml}
 users:
   - name: root
