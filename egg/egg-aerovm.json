@@ -32,9 +32,9 @@
     },
     "scripts": {
         "installation": {
-            "script": null,
+            "script": "#!/bin/sh\n# AeroVM has no install-time setup: the VM disk is created and provisioned\n# on first boot by /start.sh. This no-op just lets Pterodactyl mark the\n# server as successfully installed.\necho 'AeroVM: no installation steps required.'\nexit 0\n",
             "container": "alpine:3.19",
-            "entrypoint": "bash"
+            "entrypoint": "sh"
         }
     },
     "variables": [
