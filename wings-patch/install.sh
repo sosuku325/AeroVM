@@ -68,10 +68,13 @@ check_wings_version() {
         exit 1
     fi
 
-    WINGS_VERSION=$("$WINGS_BIN" --version 2>/dev/null | grep -oP 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
+    # Wings exposes its version via the `version` subcommand (prints "wings vX.Y.Z");
+    # it has no --version flag. Fall back to --version just in case a future build
+    # adds one.
+    WINGS_VERSION=$({ "$WINGS_BIN" version 2>/dev/null || "$WINGS_BIN" --version 2>/dev/null || true; } | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
 
     if [ -z "$WINGS_VERSION" ]; then
-        echo "ERROR: Could not determine Wings version" >&2
+        echo "ERROR: Could not determine Wings version (tried '${WINGS_BIN} version')" >&2
         exit 1
     fi
 
