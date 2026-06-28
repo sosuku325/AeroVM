@@ -523,5 +523,6 @@ exec qemu-system-x86_64 \
     "${SMBIOS_OPTS[@]}" \
     "${CDROM_OPTS[@]}" \
     -device virtio-balloon \
+    -device virtio-rng-pci \
     -boot order=c \
     -no-reboot
