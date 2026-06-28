@@ -100,6 +100,13 @@ if [ "$DISPLAY_MODE" = "rdp" ] && [ "$CLOUD_INIT_MODE" -ne 1 ]; then
     exit 1
 fi
 
+# RDP needs host port 3389; if the primary (SSH) allocation is also 3389 the
+# two forwards collide and RDP would be silently shadowed by SSH.
+if [ "$DISPLAY_MODE" = "rdp" ] && [ "$((10#$SERVER_PORT))" -eq 3389 ]; then
+    echo "ERROR: DISPLAY_MODE=rdp needs host port 3389, but the server's primary port is also 3389; assign a different primary port" >&2
+    exit 1
+fi
+
 needs_desktop=0
 case "$DISPLAY_MODE" in
     vnc|novnc|spice|rdp) [ "$CLOUD_INIT_MODE" -eq 1 ] && needs_desktop=1 ;;
@@ -282,9 +289,23 @@ fi
 build_hostfwd() {
     local result=""
     declare -A seen_host_ports=()
+    declare -A reserved_ports=()
+
+    # Ports the container itself binds for the chosen display mode. Forwarding
+    # one of these via QEMU user-net would either collide with the display
+    # listener (qemu refusing to start) or silently steal traffic from it, so
+    # they must never become hostfwd rules.
+    case "$DISPLAY_MODE" in
+        vnc|spice) reserved_ports[5900]=1 ;;
+        novnc)     reserved_ports[5900]=1; reserved_ports[$NOVNC_PORT]=1 ;;
+    esac
 
     add_fwd() {
         local host_p="$1" guest_p="$2"
+        if [ -n "${reserved_ports[$host_p]:-}" ]; then
+            echo "WARNING: Skipping port ${host_p}: reserved by DISPLAY_MODE=${DISPLAY_MODE}" >&2
+            return
+        fi
         if [ -n "${seen_host_ports[$host_p]:-}" ]; then
             echo "WARNING: Skipping duplicate host port forward: ${host_p} (already forwarded to guest port ${seen_host_ports[$host_p]})" >&2
             return
@@ -332,13 +353,11 @@ build_hostfwd() {
     echo "$result"
 }
 
-NETDEV_OPTS=(-netdev "user,id=net0$(build_hostfwd)" -device virtio-net-pci,netdev=net0)
-
-
-
 NOVNC_PORT=6080
 NOVNC_PID=""
 NOVNC_LOG="/home/container/.novnc.log"
+
+NETDEV_OPTS=(-netdev "user,id=net0$(build_hostfwd)" -device virtio-net-pci,netdev=net0)
 
 cleanup() {
     [ -n "$NOVNC_PID" ] && kill "$NOVNC_PID" 2>/dev/null || true
