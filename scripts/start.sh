@@ -4,20 +4,26 @@ set -euo pipefail
 
 
 validate_int() {
-    local name="$1" value="$2" min="$3"
-    if ! [[ "$value" =~ ^[0-9]+$ ]] || [ "$value" -lt "$min" ]; then
-        echo "ERROR: $name must be an integer >= $min (got: '$value')" >&2
+    local name="$1" value="$2" min="$3" max="${4:-}"
+    # Guard the digit count before any arithmetic: a value wider than int64
+    # makes `[ -lt ]`/`[ -gt ]` error out, which would otherwise short-circuit
+    # the check and let an absurd value slip through.
+    if ! [[ "$value" =~ ^[0-9]{1,18}$ ]]; then
+        echo "ERROR: $name must be an integer (got: '$value')" >&2
+        exit 1
+    fi
+    if [ "$value" -lt "$min" ]; then
+        echo "ERROR: $name must be >= $min (got: $value)" >&2
+        exit 1
+    fi
+    if [ -n "$max" ] && [ "$value" -gt "$max" ]; then
+        echo "ERROR: $name must be <= $max (got: $value)" >&2
         exit 1
     fi
 }
 
 validate_port() {
-    local name="$1" value="$2"
-    validate_int "$name" "$value" 1
-    if [ "$value" -gt 65535 ]; then
-        echo "ERROR: $name must be <= 65535 (got: $value)" >&2
-        exit 1
-    fi
+    validate_int "$1" "$2" 1 65535
 }
 
 yaml_dquote() {
@@ -41,14 +47,11 @@ OVERWRITE_IP="${OVERWRITE_IP:-}"
 BANNER="${BANNER:-}"
 CLOUD_OS_FAMILY="${CLOUD_OS_FAMILY:-}"
 
-validate_int "VM_DISK_GB" "$VM_DISK_GB" 1
-validate_int "VM_RAM_MB" "$VM_RAM_MB" 128
-validate_int "VM_CPU_CORES" "$VM_CPU_CORES" 1
-
-if [ "$VM_CPU_CORES" -gt 16 ]; then
-    echo "ERROR: VM_CPU_CORES must be <= 16 (got: $VM_CPU_CORES)" >&2
-    exit 1
-fi
+# Maxes keep downstream arithmetic (e.g. disk bytes) well within int64 and
+# reject nonsensical values before they reach QEMU.
+validate_int "VM_DISK_GB" "$VM_DISK_GB" 1 1048576
+validate_int "VM_RAM_MB" "$VM_RAM_MB" 128 16777216
+validate_int "VM_CPU_CORES" "$VM_CPU_CORES" 1 16
 validate_port "SERVER_PORT" "$SERVER_PORT"
 
 case "$DISPLAY_MODE" in
