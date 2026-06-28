@@ -102,6 +102,7 @@ Configure RAM, CPU, and disk via the egg variables. Start the server — the VM 
 | `VM_CPU_CORES` | vCPU cores (max 16) | `1` |
 | `VM_DISK_GB` | Virtual disk size (GB) | `20` |
 | `DISPLAY_MODE` | `ssh` / `vnc` / `novnc` / `spice` / `rdp` / `none` | `ssh` |
+| `KVM` | `auto` (use KVM if available) / `off` (force software emulation) / `on` (require KVM) | `auto` |
 | `ADDITIONAL_PORTS` | Extra port forwards (e.g. `8080-80,443`) | — |
 | `UEFI` | Enable UEFI firmware (`0` or `1`) | `0` |
 | `OS_HOSTNAME` | Guest hostname (cloud-init images only) | `aerovm` |
@@ -116,6 +117,10 @@ Configure RAM, CPU, and disk via the egg variables. Start the server — the VM 
 > `VM_RAM_MB` and `VM_CPU_CORES` are independent of Pterodactyl's resource limits. Set them to values your node can actually support.
 >
 > `OS_HOSTNAME`/`OS_PASSWORD`/`OS_PUBKEY`/`PACKAGE_UPDATE` only have an effect on the cloud-init Docker images. The blank-disk images (Alpine/Ubuntu LTS) ignore them since there's no OS installed yet to configure.
+>
+> **Pterodactyl "Disk Space"** (the container disk limit, in MiB) must be larger than `VM_DISK_GB` — the VM's `disk.qcow2` can grow up to `VM_DISK_GB`, and a server is stopped if it exceeds its Pterodactyl disk limit. For `VM_DISK_GB=20`, set Disk Space to ~`25000` MiB or `0` (unlimited).
+
+> ⚠️ **Nested virtualization warning.** If your Pterodactyl **node is itself a virtual machine** (e.g. a VM from another VPS host), enabling hardware KVM inside it means *nested* virtualization. On some hosts (notably certain AMD setups) nested KVM is unstable and can **kernel-panic the whole node**. If applying the KVM patch and booting a VM crashes your node, set the **`KVM` variable to `off`** to force stable software emulation. KVM acceleration is only safe when the node is bare metal or its host explicitly supports stable nested virtualization.
 
 ## Display Modes
 
