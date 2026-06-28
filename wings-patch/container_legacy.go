@@ -191,7 +191,6 @@ func (e *Environment) Create() error {
 		Resources:      e.Configuration.Limits().AsContainerResources(),
 		DNS:            cfg.Docker.Network.Dns,
 		LogConfig:      cfg.Docker.ContainerLogConfig(),
-		Devices:        hostDevices(),
 		GroupAdd:       hostDeviceGroups(),
 		SecurityOpt:    []string{"no-new-privileges"},
 		ReadonlyRootfs: true,
@@ -202,6 +201,10 @@ func (e *Environment) Create() error {
 		NetworkMode: networkMode,
 		UsernsMode:  container.UsernsMode(cfg.Docker.UsernsMode),
 	}
+
+	// Devices is a promoted field from the embedded container.Resources struct,
+	// so it cannot be set in the HostConfig literal above; assign it here.
+	hostConf.Devices = hostDevices()
 
 	if _, err := e.client.ContainerCreate(ctx, conf, hostConf, nil, nil, e.Id); err != nil {
 		return errors.Wrap(err, "environment/docker: failed to create container")
