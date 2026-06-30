@@ -4,3 +4,8 @@ Thumbs.db
 .git/
 *.log
 *.tmp
+
+# VM runtime artifacts (created inside the container at boot, never committed)
+*.qcow2
+*.iso
+.cloud-init-instance-id
