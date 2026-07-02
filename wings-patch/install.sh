@@ -7,6 +7,10 @@ WINGS_REPO="https://github.com/pterodactyl/wings"
 CONTAINER_GO_URL="https://raw.githubusercontent.com/sosuku325/aerovm/main/wings-patch/container.go.txt"
 CONTAINER_GO_LEGACY_URL="https://raw.githubusercontent.com/sosuku325/aerovm/main/wings-patch/container_legacy.go.txt"
 MIN_SUPPORTED_WINGS_VERSION="v1.11.9"
+# Newest Wings minor this patch has been compile-tested against. Newer
+# releases usually still work (the overlay only touches container creation),
+# but upstream could reshape container.go — warn so the user knows.
+MAX_TESTED_MINOR_VERSION="13"
 
 # Wings v1.12.0 switched its pinned docker/docker SDK from v25 to v28, which
 # moved several option types (e.g. image.PullOptions, network.InspectOptions)
@@ -120,6 +124,13 @@ check_wings_version() {
         echo "INFO: Wings v1.$((LEGACY_MINOR_VERSION + 1))+ detected, using current docker SDK patch"
         CONTAINER_GO_SELECTED_URL="$CONTAINER_GO_URL"
         GO_MIN_VERSION="$GO_CURRENT_VERSION"
+    fi
+
+    if [ "$major" -gt 1 ] || { [ "$major" -eq 1 ] && [ "$minor" -gt "$MAX_TESTED_MINOR_VERSION" ]; }; then
+        echo "WARNING: Wings ${WINGS_VERSION} is newer than this patch has been tested with (v1.${MAX_TESTED_MINOR_VERSION}.x)."
+        echo "         If upstream changed environment/docker/container.go, the build may fail — in that"
+        echo "         case nothing is modified (the build runs before Wings is touched). Check for an"
+        echo "         updated AeroVM patch at https://github.com/sosuku325/aerovm if it does."
     fi
 
     echo "INFO: Wings version check passed (requires Go >= ${GO_MIN_VERSION})"
