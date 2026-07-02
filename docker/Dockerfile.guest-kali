@@ -1,0 +1,52 @@
+FROM alpine:3.19 AS kali-fetch
+
+RUN echo "https://dl-cdn.alpinelinux.org/alpine/v3.19/community" >> /etc/apk/repositories \
+    && apk add --no-cache curl tar xz qemu-img
+
+# Kali publishes its GenericCloud image as a tar.xz containing a raw disk, and
+# the filename changes every release — resolve the current one from the
+# directory listing, then convert raw -> qcow2 (drops the unallocated space).
+RUN set -e; \
+    base="https://kali.download/cloud-images/current"; \
+    name="$(curl -fsSL "$base/" | grep -oE 'kali-linux-[0-9.]+-cloud-genericcloud-amd64\.tar\.xz' | head -1)"; \
+    test -n "$name"; \
+    echo "Fetching $name"; \
+    curl -fsSL -o /tmp/kali.tar.xz "$base/$name"; \
+    mkdir /tmp/x; \
+    tar -xJf /tmp/kali.tar.xz -C /tmp/x; \
+    disk="$(find /tmp/x -type f \( -name '*.raw' -o -name '*.qcow2' \) | head -1)"; \
+    test -n "$disk"; \
+    mkdir -p /opt/base-image; \
+    qemu-img convert -O qcow2 "$disk" /opt/base-image/base.qcow2; \
+    rm -rf /tmp/kali.tar.xz /tmp/x
+
+FROM alpine:3.19
+
+ENV CLOUD_OS_FAMILY=debian
+
+RUN echo "https://dl-cdn.alpinelinux.org/alpine/v3.19/community" >> /etc/apk/repositories \
+    && apk add --no-cache \
+        qemu-system-x86_64 \
+        qemu-img \
+        qemu-modules \
+        qemu-ui-spice-core \
+        ovmf \
+        bash \
+        novnc \
+        xorriso \
+        curl \
+    && rm -rf /var/cache/apk/*
+
+COPY --from=kali-fetch /opt/base-image/base.qcow2 /opt/base-image/base.qcow2
+
+RUN (addgroup kvm 2>/dev/null || true) \
+    && adduser -D -s /bin/bash container \
+    && adduser container kvm
+
+COPY scripts/start.sh /start.sh
+RUN chmod +x /start.sh
+
+USER container
+WORKDIR /home/container
+
+CMD ["/start.sh"]
