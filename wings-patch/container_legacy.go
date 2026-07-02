@@ -1,3 +1,12 @@
+//go:build ignore
+
+// This file is an overlay that REPLACES environment/docker/container.go in the
+// upstream Wings source tree (for the legacy v1.11.x docker SDK); it is not a
+// standalone package and only compiles inside Wings. The //go:build ignore tag
+// keeps local Go tooling (gopls, go build ./...) from trying to type-check it
+// here — where the rest of the Wings docker package is absent — which would
+// otherwise report spurious "undefined"/redeclaration errors. install.sh strips
+// this tag before building.
 package docker
 
 import (

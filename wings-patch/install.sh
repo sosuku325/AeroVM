@@ -171,7 +171,13 @@ build_patched_wings() {
     git clone --depth=1 --branch "$WINGS_VERSION" "$WINGS_REPO" "$WORKDIR/wings"
 
     echo "INFO: Downloading patched container.go..."
-    curl -fsSL "$CONTAINER_GO_SELECTED_URL" -o "$WORKDIR/wings/environment/docker/container.go"
+    local target="$WORKDIR/wings/environment/docker/container.go"
+    curl -fsSL "$CONTAINER_GO_SELECTED_URL" -o "$target"
+
+    # The overlay carries a `//go:build ignore` tag so it doesn't error in local
+    # Go tooling inside the AeroVM repo (where the rest of the Wings package is
+    # absent). Strip it here so it compiles as part of Wings.
+    sed -i '/^\/\/go:build ignore$/d' "$target"
 
     echo "INFO: Building Wings..."
     (cd "$WORKDIR/wings" && go build -o wings .)

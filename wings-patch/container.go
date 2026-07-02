@@ -1,3 +1,11 @@
+//go:build ignore
+
+// This file is an overlay that REPLACES environment/docker/container.go in the
+// upstream Wings source tree; it is not a standalone package and only compiles
+// inside Wings. The //go:build ignore tag keeps local Go tooling (gopls, go
+// build ./...) from trying to type-check it here — where the rest of the Wings
+// docker package is absent — which would otherwise report spurious
+// "undefined"/redeclaration errors. install.sh strips this tag before building.
 package docker
 
 import (
@@ -175,7 +183,7 @@ func (e *Environment) Create() error {
 				Ingress:    false,
 				ConfigOnly: false,
 				Options: map[string]string{
-					"encryption":                               "false",
+					"encryption": "false",
 					"com.docker.network.bridge.default_bridge": "false",
 					"com.docker.network.host_ipv4":             a.DefaultMapping.Ip,
 				},
@@ -279,7 +287,6 @@ func (e *Environment) SendCommand(c string) error {
 	_, err := e.stream.Conn.Write([]byte(c + "\n"))
 	return errors.Wrap(err, "environment/docker: could not write to container stream")
 }
-
 
 func (e *Environment) Readlog(lines int) ([]string, error) {
 	r, err := e.client.ContainerLogs(context.Background(), e.Id, container.LogsOptions{
