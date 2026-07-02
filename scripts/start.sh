@@ -302,10 +302,26 @@ if [ "$CLOUD_INIT_MODE" -eq 1 ]; then
         echo "$instance_id" > "$INSTANCE_ID_FILE"
     fi
 
+    GENERATED_PW_FILE="/home/container/.aerovm-root-password"
+
     password="$OS_PASSWORD"
     if [ -z "$password" ]; then
-        password="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 20 || true)"
-        echo "INFO: OS_PASSWORD was empty, generated root password: ${password}"
+        # Persist the generated password: without this, every boot would print
+        # a fresh random password that cloud-init never applies (provisioning
+        # only runs when the instance-id changes), stranding the user with a
+        # console full of passwords that don't work.
+        if [ -f "$GENERATED_PW_FILE" ]; then
+            password="$(cat "$GENERATED_PW_FILE")"
+            echo "INFO: OS_PASSWORD is empty, using previously generated root password: ${password}"
+        else
+            password="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 20 || true)"
+            if [ -z "$password" ]; then
+                echo "ERROR: Failed to generate a random root password" >&2
+                exit 1
+            fi
+            (umask 077; printf '%s\n' "$password" > "$GENERATED_PW_FILE")
+            echo "INFO: OS_PASSWORD was empty, generated root password: ${password}"
+        fi
     fi
 
     pkg_update="false"
