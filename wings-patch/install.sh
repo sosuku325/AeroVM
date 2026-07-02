@@ -176,7 +176,12 @@ build_patched_wings() {
     curl -fsSL "$CONTAINER_GO_SELECTED_URL" -o "$WORKDIR/wings/environment/docker/container.go"
 
     echo "INFO: Building Wings..."
-    (cd "$WORKDIR/wings" && go build -o wings .)
+    # Embed the real version (upstream does this via Makefile ldflags). Without
+    # it the binary reports "develop": the panel would show a bogus version and
+    # re-running this installer would fail to detect the Wings version.
+    (cd "$WORKDIR/wings" && go build \
+        -ldflags "-s -w -X github.com/pterodactyl/wings/system.Version=${WINGS_VERSION#v}" \
+        -o wings .)
 
     echo "INFO: Build complete"
 }
