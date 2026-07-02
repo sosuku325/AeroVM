@@ -91,8 +91,10 @@ case "$KVM" in
         ;;
 esac
 
-if ! [[ "$OS_HOSTNAME" =~ ^[a-zA-Z0-9-]{1,63}$ ]]; then
-    echo "ERROR: OS_HOSTNAME must be 1-63 characters of letters, numbers, and hyphens (got: '$OS_HOSTNAME')" >&2
+# RFC 952/1123: labels are letters/digits/hyphens, 1-63 chars, and must not
+# start or end with a hyphen (guests reject such hostnames).
+if ! [[ "$OS_HOSTNAME" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$ ]]; then
+    echo "ERROR: OS_HOSTNAME must be 1-63 letters, numbers, and hyphens, and must not start or end with a hyphen (got: '$OS_HOSTNAME')" >&2
     exit 1
 fi
 
