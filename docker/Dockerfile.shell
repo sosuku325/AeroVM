@@ -1,0 +1,23 @@
+FROM alpine:3.19
+
+# Debug/utility image: no VM, just an interactive shell in the container with
+# the same tooling the VM images carry (qemu-img, curl, xorriso). Useful for
+# inspecting/repairing disk.qcow2 or seed files over the Pterodactyl console.
+
+RUN echo "https://dl-cdn.alpinelinux.org/alpine/v3.19/community" >> /etc/apk/repositories \
+    && apk add --no-cache \
+        bash \
+        qemu-img \
+        xorriso \
+        curl \
+    && rm -rf /var/cache/apk/*
+
+RUN adduser -D -s /bin/bash container
+
+COPY scripts/shell.sh /shell.sh
+RUN chmod +x /shell.sh
+
+USER container
+WORKDIR /home/container
+
+CMD ["/shell.sh"]
