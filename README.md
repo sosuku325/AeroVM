@@ -23,7 +23,7 @@ Works without KVM. Faster with KVM.
 - **KVM hybrid** — runs on software emulation by default; hardware acceleration when KVM is available
 - **Lightweight** — tuned QEMU flags (virtio disk/net, memory balloon); the Alpine blank-disk image is the smallest option
 - **Pterodactyl native** — one egg import, no panel modifications required
-- **Two ways to provision**: pick a cloud-init image (Debian, Ubuntu, Fedora, Arch, Rocky, AlmaLinux) that's ready to log into on first boot, or install any OS yourself on a blank disk from an installer ISO (`OS_ISO_URL` or an uploaded `os.iso`)
+- **Two ways to provision**: pick a cloud-init image (Debian 10-13, Ubuntu 18.04-24.04, Kali, Fedora, Arch, Rocky, AlmaLinux) that's ready to log into on first boot, or install any OS yourself on a blank disk from an installer ISO (`OS_ISO_URL` or an uploaded `os.iso`)
 - **SSH, VNC, noVNC, SPICE, or RDP** — cloud-init images can auto-provision a lightweight desktop for the latter four
 
 ## Requirements
@@ -167,11 +167,15 @@ All images are published to `ghcr.io/sosuku325/aerovm:<tag>`.
 |-----|-----------|------------------|
 | `alpine` | Alpine 3.19 | — (blank disk) |
 | `ubuntu-22.04` / `ubuntu-24.04` / `ubuntu-26.04` | Ubuntu LTS | — (blank disk) |
-| `guest-debian-12` | Alpine 3.19 | Debian 12 (bookworm) cloud image |
-| `guest-ubuntu-22.04` / `guest-ubuntu-24.04` | Alpine 3.19 | Ubuntu 22.04 (jammy) / 24.04 (noble) cloud image |
+| `guest-debian-10` … `guest-debian-13` | Alpine 3.19 | Debian 10 (buster, EOL) / 11 (bullseye) / 12 (bookworm) / 13 (trixie) cloud image |
+| `guest-ubuntu-18.04` … `guest-ubuntu-24.04` | Alpine 3.19 | Ubuntu 18.04 (bionic, EOL) / 20.04 (focal) / 22.04 (jammy) / 24.04 (noble) cloud image |
+| `guest-kali` | Alpine 3.19 | Kali Linux Rolling (GenericCloud, converted to qcow2 at build) |
 | `guest-fedora` | Alpine 3.19 | Fedora Cloud Base 44 |
 | `guest-arch` | Alpine 3.19 | Arch Linux (latest cloud image) |
 | `guest-rockylinux` / `guest-almalinux` | Alpine 3.19 | Rocky Linux 9 / AlmaLinux 9 GenericCloud |
+| `shell` | Alpine 3.19 | — (debug container: no VM, interactive shell with `qemu-img`/`xorriso`/`curl` for inspecting server files) |
+
+> Debian 10/11 bundle an older cloud-init (20.x), so AeroVM automatically uses the legacy `chpasswd` format there (`CLOUD_INIT_LEGACY=1` baked into those images) — passwords work the same either way. The EOL images (Debian 10, Ubuntu 18.04) no longer receive upstream security updates; prefer a supported release unless you specifically need them.
 
 Cloud-init images bundle the official upstream `qcow2`/`img` at build time, so no extra download happens when a server is created. Desktop sessions use **XFCE4 + LightDM** (with **xrdp** for RDP, **spice-vdagent** for SPICE).
 
@@ -183,18 +187,18 @@ AeroVM/
 │   └── egg-aerovm.json       # Pterodactyl egg (user-facing)
 ├── docker/
 │   ├── Dockerfile.alpine               # Alpine-based image, blank disk (smallest)
-│   ├── Dockerfile.ubuntu-22.04         # Ubuntu 22.04 LTS image, blank disk
-│   ├── Dockerfile.ubuntu-24.04         # Ubuntu 24.04 LTS image, blank disk
-│   ├── Dockerfile.ubuntu-26.04         # Ubuntu 26.04 LTS image, blank disk
-│   ├── Dockerfile.guest-debian-12      # Debian 12 cloud image bundled, cloud-init
-│   ├── Dockerfile.guest-ubuntu-22.04   # Ubuntu 22.04 cloud image bundled, cloud-init
-│   ├── Dockerfile.guest-ubuntu-24.04   # Ubuntu 24.04 cloud image bundled, cloud-init
+│   ├── Dockerfile.ubuntu-{22,24,26}.04 # Ubuntu LTS images, blank disk
+│   ├── Dockerfile.guest-debian-{10..13}    # Debian cloud images bundled, cloud-init
+│   ├── Dockerfile.guest-ubuntu-{18..24}.04 # Ubuntu cloud images bundled, cloud-init
+│   ├── Dockerfile.guest-kali           # Kali Linux cloud image bundled, cloud-init
 │   ├── Dockerfile.guest-fedora         # Fedora Cloud image bundled, cloud-init
 │   ├── Dockerfile.guest-arch           # Arch Linux cloud image bundled, cloud-init
 │   ├── Dockerfile.guest-rockylinux     # Rocky Linux cloud image bundled, cloud-init
-│   └── Dockerfile.guest-almalinux      # AlmaLinux cloud image bundled, cloud-init
+│   ├── Dockerfile.guest-almalinux      # AlmaLinux cloud image bundled, cloud-init
+│   └── Dockerfile.shell                # Debug container (no VM, interactive shell)
 ├── scripts/
-│   └── start.sh              # VM startup script
+│   ├── start.sh              # VM startup script
+│   └── shell.sh              # Entrypoint for the shell debug image
 ├── wings-patch/
 │   ├── container.go.txt      # Patched Wings file (KVM support), for Wings v1.12+
 │   ├── container_legacy.go.txt # Patched Wings file (KVM support), for Wings v1.11.x
