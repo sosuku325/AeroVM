@@ -11,8 +11,14 @@
     "features": null,
     "docker_images": {
         "Debian 12 — ready to use (recommended)": "ghcr.io/sosuku325/aerovm:guest-debian-12",
-        "Ubuntu 22.04 — ready to use": "ghcr.io/sosuku325/aerovm:guest-ubuntu-22.04",
+        "Debian 13 — ready to use": "ghcr.io/sosuku325/aerovm:guest-debian-13",
+        "Debian 11 — ready to use": "ghcr.io/sosuku325/aerovm:guest-debian-11",
+        "Debian 10 — ready to use (EOL upstream)": "ghcr.io/sosuku325/aerovm:guest-debian-10",
         "Ubuntu 24.04 — ready to use": "ghcr.io/sosuku325/aerovm:guest-ubuntu-24.04",
+        "Ubuntu 22.04 — ready to use": "ghcr.io/sosuku325/aerovm:guest-ubuntu-22.04",
+        "Ubuntu 20.04 — ready to use": "ghcr.io/sosuku325/aerovm:guest-ubuntu-20.04",
+        "Ubuntu 18.04 — ready to use (EOL upstream)": "ghcr.io/sosuku325/aerovm:guest-ubuntu-18.04",
+        "Kali Linux — ready to use": "ghcr.io/sosuku325/aerovm:guest-kali",
         "Fedora — ready to use": "ghcr.io/sosuku325/aerovm:guest-fedora",
         "Arch Linux — ready to use": "ghcr.io/sosuku325/aerovm:guest-arch",
         "Rocky Linux — ready to use": "ghcr.io/sosuku325/aerovm:guest-rockylinux",
@@ -20,7 +26,8 @@
         "Alpine — BLANK disk, boot your own installer ISO (advanced)": "ghcr.io/sosuku325/aerovm:alpine",
         "Ubuntu 22.04 LTS — BLANK disk, boot your own installer ISO (advanced)": "ghcr.io/sosuku325/aerovm:ubuntu-22.04",
         "Ubuntu 24.04 LTS — BLANK disk, boot your own installer ISO (advanced)": "ghcr.io/sosuku325/aerovm:ubuntu-24.04",
-        "Ubuntu 26.04 LTS — BLANK disk, boot your own installer ISO (advanced)": "ghcr.io/sosuku325/aerovm:ubuntu-26.04"
+        "Ubuntu 26.04 LTS — BLANK disk, boot your own installer ISO (advanced)": "ghcr.io/sosuku325/aerovm:ubuntu-26.04",
+        "Shell — debug container, no VM (advanced)": "ghcr.io/sosuku325/aerovm:shell"
     },
     "file_denylist": [],
     "startup": "/start.sh",

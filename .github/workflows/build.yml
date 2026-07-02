@@ -32,12 +32,26 @@ jobs:
             dockerfile: docker/Dockerfile.ubuntu-24.04
           - tag: ubuntu-26.04
             dockerfile: docker/Dockerfile.ubuntu-26.04
+          - tag: shell
+            dockerfile: docker/Dockerfile.shell
+          - tag: guest-debian-10
+            dockerfile: docker/Dockerfile.guest-debian-10
+          - tag: guest-debian-11
+            dockerfile: docker/Dockerfile.guest-debian-11
           - tag: guest-debian-12
             dockerfile: docker/Dockerfile.guest-debian-12
+          - tag: guest-debian-13
+            dockerfile: docker/Dockerfile.guest-debian-13
+          - tag: guest-ubuntu-18.04
+            dockerfile: docker/Dockerfile.guest-ubuntu-18.04
+          - tag: guest-ubuntu-20.04
+            dockerfile: docker/Dockerfile.guest-ubuntu-20.04
           - tag: guest-ubuntu-22.04
             dockerfile: docker/Dockerfile.guest-ubuntu-22.04
           - tag: guest-ubuntu-24.04
             dockerfile: docker/Dockerfile.guest-ubuntu-24.04
+          - tag: guest-kali
+            dockerfile: docker/Dockerfile.guest-kali
           - tag: guest-fedora
             dockerfile: docker/Dockerfile.guest-fedora
           - tag: guest-arch
