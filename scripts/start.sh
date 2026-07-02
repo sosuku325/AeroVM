@@ -57,6 +57,9 @@ BANNER="${BANNER:-}"
 CLOUD_OS_FAMILY="${CLOUD_OS_FAMILY:-}"
 KVM="${KVM:-auto}"
 
+# Fixed container port the noVNC web server listens on (DISPLAY_MODE=novnc).
+NOVNC_PORT=6080
+
 # Maxes keep downstream arithmetic (e.g. disk bytes) well within int64 and
 # reject nonsensical values before they reach QEMU.
 validate_int "VM_DISK_GB" "$VM_DISK_GB" 1 1048576
@@ -127,6 +130,25 @@ if [ "$DISPLAY_MODE" = "rdp" ] && [ "$((10#$SERVER_PORT))" -eq 3389 ]; then
     echo "ERROR: DISPLAY_MODE=rdp needs host port 3389, but the server's primary port is also 3389; assign a different primary port" >&2
     exit 1
 fi
+
+# vnc/novnc/spice bind fixed container ports for their display listeners. If
+# the primary (SSH) allocation is one of those ports, the SSH hostfwd would be
+# skipped as reserved and the VM would boot with no SSH access at all — fail
+# loudly instead.
+case "$DISPLAY_MODE" in
+    vnc|spice)
+        if [ "$((10#$SERVER_PORT))" -eq 5900 ]; then
+            echo "ERROR: DISPLAY_MODE=${DISPLAY_MODE} uses port 5900 for the display, but the server's primary port is also 5900; assign a different primary port" >&2
+            exit 1
+        fi
+        ;;
+    novnc)
+        if [ "$((10#$SERVER_PORT))" -eq 5900 ] || [ "$((10#$SERVER_PORT))" -eq "$NOVNC_PORT" ]; then
+            echo "ERROR: DISPLAY_MODE=novnc uses ports 5900 and ${NOVNC_PORT}, but the server's primary port collides with one of them; assign a different primary port" >&2
+            exit 1
+        fi
+        ;;
+esac
 
 needs_desktop=0
 case "$DISPLAY_MODE" in
@@ -431,7 +453,6 @@ build_hostfwd() {
     echo "$result"
 }
 
-NOVNC_PORT=6080
 NOVNC_PID=""
 NOVNC_LOG="/home/container/.novnc.log"
 
