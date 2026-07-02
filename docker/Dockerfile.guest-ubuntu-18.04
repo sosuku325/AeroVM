@@ -1,0 +1,32 @@
+FROM alpine:3.19
+
+ENV CLOUD_OS_FAMILY=debian
+
+RUN echo "https://dl-cdn.alpinelinux.org/alpine/v3.19/community" >> /etc/apk/repositories \
+    && apk add --no-cache \
+        qemu-system-x86_64 \
+        qemu-img \
+        qemu-modules \
+        qemu-ui-spice-core \
+        ovmf \
+        bash \
+        novnc \
+        xorriso \
+        curl \
+    && rm -rf /var/cache/apk/*
+
+RUN mkdir -p /opt/base-image \
+    && curl -fsSL -o /opt/base-image/base.qcow2 \
+        "https://cloud-images.ubuntu.com/bionic/current/bionic-server-cloudimg-amd64.img"
+
+RUN (addgroup kvm 2>/dev/null || true) \
+    && adduser -D -s /bin/bash container \
+    && adduser container kvm
+
+COPY scripts/start.sh /start.sh
+RUN chmod +x /start.sh
+
+USER container
+WORKDIR /home/container
+
+CMD ["/start.sh"]
