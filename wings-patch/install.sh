@@ -4,8 +4,8 @@ set -euo pipefail
 WINGS_BIN="/usr/local/bin/wings"
 WINGS_SERVICE="wings"
 WINGS_REPO="https://github.com/pterodactyl/wings"
-CONTAINER_GO_URL="https://raw.githubusercontent.com/sosuku325/aerovm/main/wings-patch/container.go"
-CONTAINER_GO_LEGACY_URL="https://raw.githubusercontent.com/sosuku325/aerovm/main/wings-patch/container_legacy.go"
+CONTAINER_GO_URL="https://raw.githubusercontent.com/sosuku325/aerovm/main/wings-patch/container.go.txt"
+CONTAINER_GO_LEGACY_URL="https://raw.githubusercontent.com/sosuku325/aerovm/main/wings-patch/container_legacy.go.txt"
 MIN_SUPPORTED_WINGS_VERSION="v1.11.9"
 
 # Wings v1.12.0 switched its pinned docker/docker SDK from v25 to v28, which
@@ -171,13 +171,9 @@ build_patched_wings() {
     git clone --depth=1 --branch "$WINGS_VERSION" "$WINGS_REPO" "$WORKDIR/wings"
 
     echo "INFO: Downloading patched container.go..."
-    local target="$WORKDIR/wings/environment/docker/container.go"
-    curl -fsSL "$CONTAINER_GO_SELECTED_URL" -o "$target"
-
-    # The overlay carries a `//go:build ignore` tag so it doesn't error in local
-    # Go tooling inside the AeroVM repo (where the rest of the Wings package is
-    # absent). Strip it here so it compiles as part of Wings.
-    sed -i '/^\/\/go:build ignore$/d' "$target"
+    # The overlay is stored as container.go.txt in the repo (so local Go tooling
+    # ignores it); write it into the Wings tree as container.go to compile.
+    curl -fsSL "$CONTAINER_GO_SELECTED_URL" -o "$WORKDIR/wings/environment/docker/container.go"
 
     echo "INFO: Building Wings..."
     (cd "$WORKDIR/wings" && go build -o wings .)

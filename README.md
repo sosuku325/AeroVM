@@ -64,7 +64,7 @@ The script will:
 4. Set `/dev/kvm` permissions persistently (udev rule + group)
 5. Restart Wings (an EXIT-trap safety net restarts it even if a step fails midway)
 
-The patch itself adds a `/dev/kvm` device mapping to every server container and grants the container's process the host's `kvm` group, so guests can use hardware acceleration. `container.go` targets Wings v1.12+ (newer Docker SDK); `container_legacy.go` targets v1.11.x (older SDK) — the installer chooses automatically.
+The patch itself adds a `/dev/kvm` device mapping to every server container and grants the container's process the host's `kvm` group, so guests can use hardware acceleration. `container.go.txt` targets Wings v1.12+ (newer Docker SDK); `container_legacy.go.txt` targets v1.11.x (older SDK) — the installer chooses automatically. (These overlays replace a file inside the Wings source tree, so they're stored as `.go.txt` to keep local Go tooling from type-checking them out of context; the installer writes the chosen one back as `container.go` before building.)
 
 **To revert:**
 ```bash
@@ -192,8 +192,8 @@ AeroVM/
 ├── scripts/
 │   └── start.sh              # VM startup script
 ├── wings-patch/
-│   ├── container.go          # Patched Wings file (KVM support), for Wings v1.12+
-│   ├── container_legacy.go   # Patched Wings file (KVM support), for Wings v1.11.x
+│   ├── container.go.txt      # Patched Wings file (KVM support), for Wings v1.12+
+│   ├── container_legacy.go.txt # Patched Wings file (KVM support), for Wings v1.11.x
 │   └── install.sh            # One-command KVM patch installer (auto-detects Wings version)
 ├── .github/workflows/
 │   └── build.yml             # Auto-build and push all images to ghcr.io
