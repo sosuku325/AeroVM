@@ -348,11 +348,22 @@ if [ "$CLOUD_INIT_MODE" -eq 1 ]; then
     password_esc="$(yaml_dquote "$password")"
 
     desktop_users_yaml=""
-    desktop_chpasswd_yaml=""
     if [ "$needs_desktop" -eq 1 ]; then
         desktop_users_yaml=$'  - name: aerovm\n    lock_passwd: false\n    sudo: ALL=(ALL) NOPASSWD:ALL\n    shell: /bin/bash'
-        desktop_chpasswd_yaml="    - {name: aerovm, password: \"${password_esc}\", type: text}"
         echo "INFO: DISPLAY_MODE=${DISPLAY_MODE} requires a desktop environment; cloud-init will install it on first boot (may take a few minutes)"
+    fi
+
+    # The chpasswd `users` schema needs cloud-init >= 22.3. Older guests
+    # (Debian 10/11 ship cloud-init 20.x) silently ignore it — the password
+    # would never be set — so images bundling such a guest set
+    # CLOUD_INIT_LEGACY=1 and get the old (deprecated but universal) `list`
+    # form, whose literal block takes the raw password without any escaping.
+    if is_truthy "${CLOUD_INIT_LEGACY:-0}"; then
+        chpasswd_yaml=$'chpasswd:\n  expire: false\n  list: |\n    root:'"${password}"
+        [ "$needs_desktop" -eq 1 ] && chpasswd_yaml+=$'\n    aerovm:'"${password}"
+    else
+        chpasswd_yaml=$'chpasswd:\n  expire: false\n  users:\n    - {name: root, password: "'"${password_esc}"'", type: text}'
+        [ "$needs_desktop" -eq 1 ] && chpasswd_yaml+=$'\n    - {name: aerovm, password: "'"${password_esc}"'", type: text}'
     fi
 
     # Cloud images ship sshd with PermitRootLogin=prohibit-password, which blocks
@@ -386,11 +397,7 @@ disable_root: false
 ssh_pwauth: ${pwauth}
 package_update: ${pkg_update}
 package_upgrade: ${pkg_update}
-chpasswd:
-  expire: false
-  users:
-    - {name: root, password: "${password_esc}", type: text}
-${desktop_chpasswd_yaml}
+${chpasswd_yaml}
 users:
   - name: root
 ${root_keys_yaml}
