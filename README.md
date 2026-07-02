@@ -23,7 +23,7 @@ Works without KVM. Faster with KVM.
 - **KVM hybrid** — runs on software emulation by default; hardware acceleration when KVM is available
 - **Lightweight** — tuned QEMU flags (virtio disk/net, memory balloon); the Alpine blank-disk image is the smallest option
 - **Pterodactyl native** — one egg import, no panel modifications required
-- **Two ways to provision**: bring your own OS on a blank disk, or pick a cloud-init image (Debian, Ubuntu, Fedora, Arch, Rocky, AlmaLinux) that's ready to log into on first boot
+- **Two ways to provision**: pick a cloud-init image (Debian, Ubuntu, Fedora, Arch, Rocky, AlmaLinux) that's ready to log into on first boot, or install any OS yourself on a blank disk from an installer ISO (`OS_ISO_URL` or an uploaded `os.iso`)
 - **SSH, VNC, noVNC, SPICE, or RDP** — cloud-init images can auto-provision a lightweight desktop for the latter four
 
 ## Requirements
@@ -87,7 +87,7 @@ Navigate to **Admin → Nests → Import Egg** and upload the file.
 
 Create a new server using the AeroVM egg, and pick a **Docker Image**:
 
-- **Blank disk** (Alpine, Ubuntu 22.04/24.04/26.04 LTS): an empty disk — you provide the OS yourself (e.g. by uploading a pre-made disk image over SFTP).
+- **Blank disk** (Alpine, Ubuntu 22.04/24.04/26.04 LTS): an empty disk — you install the OS yourself from an installer ISO. Set `OS_ISO_URL` to a direct ISO download link (or upload one as `os.iso` via SFTP/file manager), set `DISPLAY_MODE` to `vnc` or `novnc` to see the installer, and start the server. The ISO boots automatically while the disk is empty; after installing, delete `os.iso` and clear `OS_ISO_URL`.
 - **Cloud-init** (Debian 12, Ubuntu 22.04, Ubuntu 24.04, Fedora, Arch Linux, Rocky Linux, AlmaLinux): the disk is pre-provisioned from the official cloud image and ready to log into on first boot — set `OS_HOSTNAME`/`OS_PASSWORD`/`OS_PUBKEY` to configure it. Setting `DISPLAY_MODE` to `vnc`/`novnc`/`spice`/`rdp` makes cloud-init install a desktop environment automatically (adds a few minutes to first boot).
 
 Configure RAM, CPU, and disk via the egg variables. Start the server — the VM will boot automatically, using KVM acceleration if step 1 was applied to that node.
@@ -105,10 +105,11 @@ Configure RAM, CPU, and disk via the egg variables. Start the server — the VM 
 | `KVM` | `auto` (KVM on bare metal; software emulation if the node is itself a VM) / `off` (force software emulation) / `on` (force KVM, even nested) | `auto` |
 | `ADDITIONAL_PORTS` | Extra port forwards (e.g. `8080-80,443`) | — |
 | `UEFI` | Enable UEFI firmware (`0` or `1`) | `0` |
-| `OS_HOSTNAME` | Guest hostname (cloud-init images only) | `aerovm` |
-| `OS_PASSWORD` | Root/SSH password (cloud-init images only). Leave blank to auto-generate one (printed to the console on first boot) | — |
+| `OS_HOSTNAME` | Guest hostname (cloud-init images only). Letters/digits/hyphens, no leading or trailing hyphen | `aerovm` |
+| `OS_PASSWORD` | Root/SSH password (cloud-init images only). Leave blank to auto-generate one — it's persisted in `.aerovm-root-password` and printed to the console on every boot | — |
 | `OS_PUBKEY` | SSH public key (cloud-init images only). If set, password SSH login is disabled | — |
 | `PACKAGE_UPDATE` | Update packages on every boot (cloud-init images only, `0` or `1`) | `0` |
+| `OS_ISO_URL` | Direct http(s) URL of an OS installer ISO (blank-disk images only) — downloaded once as `os.iso` and attached as a CD-ROM | — |
 | `IPV4_MODE` | `disabled` (ignore Additional Ports) / `user` (forward Additional Ports) / `all` (also forward ports 1-1024, slower startup) | `user` |
 | `OVERWRITE_HOST` | Overwrite the host/product name shown inside the VM (neofetch, dmidecode, etc.) | — |
 | `OVERWRITE_IP` | Overwrite the host/IP shown in the connection info printed at startup | — |
@@ -118,7 +119,9 @@ Configure RAM, CPU, and disk via the egg variables. Start the server — the VM 
 >
 > **First boot timing out / dropping to emergency mode?** The ready-to-use cloud-init images boot a full systemd userland and need more than the bare minimum, especially when the node runs the VM under software emulation (`KVM=off`, or `auto` on a nested node). Give the server at least **2048 MB RAM and 2 cores** — a starved VM can miss systemd's 90s device-detection timeout and drop to an emergency shell. On bare-metal nodes with real KVM, 1024 MB / 1 core is usually fine.
 >
-> `OS_HOSTNAME`/`OS_PASSWORD`/`OS_PUBKEY`/`PACKAGE_UPDATE` only have an effect on the cloud-init Docker images. The blank-disk images (Alpine/Ubuntu LTS) ignore them since there's no OS installed yet to configure.
+> `OS_HOSTNAME`/`OS_PASSWORD`/`OS_PUBKEY`/`PACKAGE_UPDATE` only have an effect on the cloud-init Docker images. The blank-disk images (Alpine/Ubuntu LTS) ignore them since there's no OS installed yet to configure — use `OS_ISO_URL` (or upload `os.iso`) there instead.
+>
+> **Changing settings later:** on cloud-init images, changing `OS_HOSTNAME`, `OS_PASSWORD`, `OS_PUBKEY`, `PACKAGE_UPDATE`, or `DISPLAY_MODE` is applied on the **next restart** (the provisioning re-runs; the guest also regenerates its SSH host keys, so your SSH client will show a one-time host-key warning).
 >
 > **Pterodactyl "Disk Space"** (the container disk limit, in MiB) must be larger than `VM_DISK_GB` — the VM's `disk.qcow2` can grow up to `VM_DISK_GB`, and a server is stopped if it exceeds its Pterodactyl disk limit. For `VM_DISK_GB=20`, set Disk Space to ~`25000` MiB or `0` (unlimited).
 
@@ -137,21 +140,22 @@ Configure RAM, CPU, and disk via the egg variables. Start the server — the VM 
 
 On a cloud-init image, choosing `vnc`/`novnc`/`spice`/`rdp` makes cloud-init install a lightweight XFCE desktop (and xrdp, for `rdp`) on first boot — this adds a few minutes before the desktop is usable. A dedicated `aerovm` sudo user (password: `OS_PASSWORD`) is created for the desktop session — `vnc`/`novnc`/`spice` auto-login as `aerovm`, and `rdp` prompts for it at connection time. On blank-disk images, `vnc`/`novnc`/`spice` just show the VM's console/installer screen (no OS to provision yet), and `rdp` isn't available.
 
-> **Note:** `vnc`/`spice` (port `5900`), `novnc` (port `6080`), and `rdp` (port `3389`) all need their port assigned as an **Allocation** in the Pterodactyl panel, the same as `ADDITIONAL_PORTS` — QEMU listening on the port isn't enough if Docker/Wings hasn't also exposed it.
+> **Note:** `vnc`/`spice` (port `5900`), `novnc` (port `6080`), and `rdp` (port `3389`) all need their port assigned as an **Allocation** in the Pterodactyl panel, the same as `ADDITIONAL_PORTS` — QEMU listening on the port isn't enough if Docker/Wings hasn't also exposed it. The server's **primary** port must be a *different* port than these — AeroVM refuses to start otherwise, because the SSH forward would be unusable.
 
 ## How It Works
 
 The container's entrypoint is [`scripts/start.sh`](scripts/start.sh), which runs every boot and builds the QEMU command line from the egg variables:
 
-1. **Validate inputs** — integers are range-checked (and guarded against int64 overflow), `DISPLAY_MODE`/`IPV4_MODE` are checked against their allowed sets, the hostname against `[a-zA-Z0-9-]{1,63}`, and `OS_PASSWORD`/`OS_PUBKEY` are rejected if they contain newlines (they're embedded into cloud-init YAML).
-2. **Detect KVM** — if `/dev/kvm` is readable *and* writable, QEMU runs with `-enable-kvm -cpu host` and `aio=native`; otherwise it falls back to software emulation (`-cpu qemu64`, `aio=threads`). Either way the VM boots.
+1. **Validate inputs** — integers are range-checked (and guarded against int64 overflow), `DISPLAY_MODE`/`IPV4_MODE`/`KVM` are checked against their allowed sets, the hostname against RFC 952/1123 label rules (1-63 letters/digits/hyphens, no leading/trailing hyphen), `OS_PASSWORD`/`OS_PUBKEY` are rejected if they contain newlines (they're embedded into cloud-init YAML), and configurations where the primary port would collide with the display port (5900/6080/3389) are rejected outright.
+2. **Detect KVM** — if `/dev/kvm` is readable *and* writable (and the node isn't itself a VM, see the nested-virtualization note), QEMU runs with `-enable-kvm -cpu host`; otherwise it falls back to software emulation (`-cpu qemu64`). Disk I/O always uses `cache=writeback,aio=threads`. Either way the VM boots.
 3. **Provision the disk** (`/home/container/disk.qcow2`, persisted across reboots):
    - *Blank-disk images*: create an empty `qcow2` of `VM_DISK_GB`.
    - *Cloud-init images*: copy the bundled cloud image (`/opt/base-image/base.qcow2`) and grow it to `VM_DISK_GB` (skipped if that's smaller than the image's own size).
-4. **Build a cloud-init seed** (cloud-init images only) — a NoCloud `cidata` ISO (`meta-data` + `user-data`) is generated with `xorriso` and attached via `-cdrom`. It sets the hostname, the root password (`chpasswd`), an SSH key (if provided), and optional package upgrades. A random instance-id is persisted (`.cloud-init-instance-id`) so cloud-init doesn't re-run on later boots. For a graphical `DISPLAY_MODE` it also creates an `aerovm` sudo user for the desktop session and runs a `runcmd` that installs XFCE + LightDM (plus `spice-vdagent` or `xrdp`) using the package manager for the image's `CLOUD_OS_FAMILY` (`debian`/`fedora`/`rhel`/`arch`).
+4. **Build a cloud-init seed** (cloud-init images only) — a NoCloud `cidata` ISO (`meta-data` + `user-data`) is generated with `xorriso` and attached via `-cdrom`. It sets the hostname, the root password (`chpasswd`), an SSH key (if provided), and optional package upgrades. The instance-id is a hash of these settings, so unchanged settings never re-provision on restarts, while any change (e.g. a new password in the panel) gets a new instance-id and is applied on the next restart. An auto-generated password is persisted in `.aerovm-root-password` so it stays valid across boots. For a graphical `DISPLAY_MODE` it also creates an `aerovm` sudo user for the desktop session and runs a `runcmd` that installs XFCE + LightDM (plus `spice-vdagent` or `xrdp`) using the package manager for the image's `CLOUD_OS_FAMILY` (`debian`/`fedora`/`rhel`/`arch`).
+   **Blank-disk images** instead attach `/home/container/os.iso` as a CD-ROM when present (downloading it first from `OS_ISO_URL` if set), and boot with `order=cd` so the firmware falls through to the installer while the disk is empty and boots the installed OS afterwards.
 5. **Set up networking** — QEMU user-mode networking with `hostfwd` rules: the primary Pterodactyl port → guest `22`, plus RDP `3389` (rdp mode), the `1-1024` range (`IPV4_MODE=all`), and `ADDITIONAL_PORTS`. Ports the display already uses (5900/6080) and duplicates are skipped.
 6. **Pick the display** — `ssh` uses the serial console (`-nographic -serial mon:stdio`); `vnc`/`novnc` use `-vga virtio` on VNC `:0` (5900), with `novnc` also launching a noVNC→VNC proxy on 6080; `spice` uses `-vga qxl` with `-spice`; `rdp`/`none` run headless.
-7. **Launch QEMU** — `exec qemu-system-x86_64` with virtio disk/net, a memory balloon, optional `-bios` (OVMF, when `UEFI` is on), and optional `-smbios` (when `OVERWRITE_HOST` is set).
+7. **Launch QEMU** — `exec qemu-system-x86_64` with virtio disk/net, a memory balloon, a `virtio-rng` device (fast guest entropy — cuts first-boot time), optional `-bios` (OVMF, when `UEFI` is on), and optional `-smbios` (when `OVERWRITE_HOST` is set).
 
 **KVM on the node (optional patch).** Wings starts each server container with an explicit numeric `uid:gid`, which makes Docker ignore the image's own group memberships — so just adding the container user to a `kvm` group in the Dockerfile isn't enough. The patch in [`wings-patch/`](wings-patch/) makes Wings map `/dev/kvm` into the container and add the host's real `kvm` group GID via Docker's `GroupAdd`, so the guest can actually open the device.
 
