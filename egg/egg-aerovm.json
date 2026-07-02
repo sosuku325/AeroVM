@@ -120,7 +120,7 @@
         },
         {
             "name": "Root Password",
-            "description": "Root/SSH password for the guest OS. Only used by cloud-init images. Leave blank to auto-generate a random password (printed to the console on first boot).",
+            "description": "Root/SSH password for the guest OS. Only used by cloud-init images. Leave blank to auto-generate a random password (printed to the console on every boot). Changing it later is applied on the next restart (the guest will also regenerate its SSH host keys).",
             "env_variable": "OS_PASSWORD",
             "default_value": "",
             "user_viewable": true,

@@ -293,15 +293,6 @@ build_desktop_runcmd() {
 CDROM_OPTS=()
 if [ "$CLOUD_INIT_MODE" -eq 1 ]; then
     SEED_ISO="/home/container/seed.iso"
-    INSTANCE_ID_FILE="/home/container/.cloud-init-instance-id"
-
-    if [ -f "$INSTANCE_ID_FILE" ]; then
-        instance_id="$(cat "$INSTANCE_ID_FILE")"
-    else
-        instance_id="aerovm-$(tr -dc 'a-f0-9' </dev/urandom | head -c 16 || true)"
-        echo "$instance_id" > "$INSTANCE_ID_FILE"
-    fi
-
     GENERATED_PW_FILE="/home/container/.aerovm-root-password"
 
     password="$OS_PASSWORD"
@@ -326,6 +317,16 @@ if [ "$CLOUD_INIT_MODE" -eq 1 ]; then
 
     pkg_update="false"
     is_truthy "$PACKAGE_UPDATE" && pkg_update="true"
+
+    # Derive the instance-id from every setting that shapes the generated
+    # user-data. cloud-init only re-runs per-instance provisioning (chpasswd,
+    # hostname, users, write_files, runcmd) when the instance-id changes, so:
+    #   same settings   -> same id -> restarts never re-provision;
+    #   changed setting -> new id  -> the change is applied on next restart
+    # (e.g. a new Root Password set in the panel actually takes effect).
+    # Note: a changed id also makes the guest regenerate its SSH host keys,
+    # so SSH clients will see a host-key warning after a settings change.
+    instance_id="aerovm-$(printf '%s\n' "$OS_HOSTNAME" "$password" "$OS_PUBKEY" "$DISPLAY_MODE" "$pkg_update" "$CLOUD_OS_FAMILY" | sha256sum | cut -c1-16)"
 
     pwauth="true"
     root_keys_yaml=""
