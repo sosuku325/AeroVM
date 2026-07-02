@@ -576,13 +576,16 @@ read -ra DISPLAY_OPTS <<< "$(build_display_opts)"
 
 UEFI_OPTS=()
 if is_truthy "$UEFI"; then
+    # Only combined code+vars images (OVMF.fd) work with -bios. Split images
+    # (OVMF_CODE.fd) need pflash drives and would silently fail to boot if
+    # passed to -bios, so they are deliberately not in this list. Both image
+    # bases (Ubuntu: /usr/share/ovmf, Alpine: /usr/share/OVMF) ship OVMF.fd.
     ovmf=""
     for path in /usr/share/ovmf/OVMF.fd \
-                /usr/share/OVMF/OVMF.fd \
-                /usr/share/edk2/ovmf/OVMF_CODE.fd; do
+                /usr/share/OVMF/OVMF.fd; do
         [ -f "$path" ] && { ovmf="$path"; break; }
     done
-    [ -z "$ovmf" ] && { echo "ERROR: UEFI=1 but OVMF firmware not found" >&2; exit 1; }
+    [ -z "$ovmf" ] && { echo "ERROR: UEFI=1 but OVMF firmware (OVMF.fd) not found" >&2; exit 1; }
     UEFI_OPTS=(-bios "$ovmf")
 fi
 
