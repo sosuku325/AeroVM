@@ -56,6 +56,7 @@ OVERWRITE_IP="${OVERWRITE_IP:-}"
 BANNER="${BANNER:-}"
 CLOUD_OS_FAMILY="${CLOUD_OS_FAMILY:-}"
 KVM="${KVM:-auto}"
+OS_ISO_URL="${OS_ISO_URL:-}"
 
 # Fixed container port the noVNC web server listens on (DISPLAY_MODE=novnc).
 NOVNC_PORT=6080
@@ -291,7 +292,11 @@ build_desktop_runcmd() {
 }
 
 CDROM_OPTS=()
+BOOT_ORDER="c"
 if [ "$CLOUD_INIT_MODE" -eq 1 ]; then
+    if [ -n "$OS_ISO_URL" ]; then
+        echo "WARNING: OS_ISO_URL is ignored on ready-to-use (cloud-init) images; it is only for the blank-disk images" >&2
+    fi
     SEED_ISO="/home/container/seed.iso"
     GENERATED_PW_FILE="/home/container/.aerovm-root-password"
 
@@ -401,6 +406,48 @@ EOF
     rm -rf "$seed_dir"
 
     CDROM_OPTS=(-cdrom "$SEED_ISO")
+else
+    # Blank-disk images: let the user boot an OS installer. Either they upload
+    # an ISO as /home/container/os.iso themselves (SFTP / panel file manager),
+    # or they set OS_ISO_URL and we download it once. With `-boot order=cd`
+    # the BIOS tries the (empty) disk first and falls through to the installer
+    # ISO; once an OS is installed, the disk boots even with the ISO attached.
+    INSTALLER_ISO="/home/container/os.iso"
+
+    if [ ! -f "$INSTALLER_ISO" ] && [ -n "$OS_ISO_URL" ]; then
+        case "$OS_ISO_URL" in
+            http://*|https://*) ;;
+            *)
+                echo "ERROR: OS_ISO_URL must be an http:// or https:// URL (got: '$OS_ISO_URL')" >&2
+                exit 1
+                ;;
+        esac
+        if ! command -v curl >/dev/null 2>&1; then
+            echo "ERROR: curl is not available in this image; upload the installer as os.iso manually instead" >&2
+            exit 1
+        fi
+        echo "INFO: Downloading installer ISO (this can take a while)..."
+        echo "      ${OS_ISO_URL}"
+        if ! curl -fL --retry 3 -o "${INSTALLER_ISO}.part" "$OS_ISO_URL"; then
+            rm -f "${INSTALLER_ISO}.part"
+            echo "ERROR: Failed to download the installer ISO from OS_ISO_URL" >&2
+            exit 1
+        fi
+        mv "${INSTALLER_ISO}.part" "$INSTALLER_ISO"
+        echo "INFO: Installer ISO saved as os.iso"
+    fi
+
+    if [ -f "$INSTALLER_ISO" ]; then
+        CDROM_OPTS=(-cdrom "$INSTALLER_ISO")
+        BOOT_ORDER="cd"
+        echo "INFO: Installer ISO attached (os.iso). It boots while the disk is empty."
+        echo "      After installing your OS, delete os.iso and clear OS_ISO_URL."
+        case "$DISPLAY_MODE" in
+            ssh|none)
+                echo "WARNING: Most OS installers need a display; set DISPLAY_MODE to vnc or novnc to interact with the installer" >&2
+                ;;
+        esac
+    fi
 fi
 
 
@@ -564,5 +611,5 @@ exec qemu-system-x86_64 \
     "${CDROM_OPTS[@]}" \
     -device virtio-balloon \
     -device virtio-rng-pci \
-    -boot order=c \
+    -boot "order=${BOOT_ORDER}" \
     -no-reboot

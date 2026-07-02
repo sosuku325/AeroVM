@@ -4,7 +4,7 @@
         "version": "PTDL_v2",
         "update_url": null
     },
-    "exported_at": "2026-06-23T00:00:00+00:00",
+    "exported_at": "2026-07-02T00:00:00+00:00",
     "name": "AeroVM",
     "author": "aerovm@sosuku325.dev",
     "description": "Lightweight QEMU-based VM for Pterodactyl. Free and open source.",
@@ -17,10 +17,10 @@
         "Arch Linux — ready to use": "ghcr.io/sosuku325/aerovm:guest-arch",
         "Rocky Linux — ready to use": "ghcr.io/sosuku325/aerovm:guest-rockylinux",
         "AlmaLinux — ready to use": "ghcr.io/sosuku325/aerovm:guest-almalinux",
-        "Alpine — BLANK disk, install your own OS (advanced)": "ghcr.io/sosuku325/aerovm:alpine",
-        "Ubuntu 22.04 LTS — BLANK disk, install your own OS (advanced)": "ghcr.io/sosuku325/aerovm:ubuntu-22.04",
-        "Ubuntu 24.04 LTS — BLANK disk, install your own OS (advanced)": "ghcr.io/sosuku325/aerovm:ubuntu-24.04",
-        "Ubuntu 26.04 LTS — BLANK disk, install your own OS (advanced)": "ghcr.io/sosuku325/aerovm:ubuntu-26.04"
+        "Alpine — BLANK disk, boot your own installer ISO (advanced)": "ghcr.io/sosuku325/aerovm:alpine",
+        "Ubuntu 22.04 LTS — BLANK disk, boot your own installer ISO (advanced)": "ghcr.io/sosuku325/aerovm:ubuntu-22.04",
+        "Ubuntu 24.04 LTS — BLANK disk, boot your own installer ISO (advanced)": "ghcr.io/sosuku325/aerovm:ubuntu-24.04",
+        "Ubuntu 26.04 LTS — BLANK disk, boot your own installer ISO (advanced)": "ghcr.io/sosuku325/aerovm:ubuntu-26.04"
     },
     "file_denylist": [],
     "startup": "/start.sh",
@@ -146,6 +146,16 @@
             "user_viewable": true,
             "user_editable": true,
             "rules": "required|boolean",
+            "field_type": "text"
+        },
+        {
+            "name": "Installer ISO URL (blank-disk images)",
+            "description": "Direct http(s) URL of an OS installer ISO. Only used by the blank-disk images: it is downloaded once as os.iso and attached as a CD-ROM, which boots automatically while the disk is empty. You can also upload an ISO yourself as os.iso instead of using this. After installing your OS, delete os.iso and clear this URL. Use DISPLAY_MODE vnc or novnc to interact with the installer.",
+            "env_variable": "OS_ISO_URL",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string",
             "field_type": "text"
         },
         {

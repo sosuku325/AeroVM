@@ -9,6 +9,8 @@ RUN apt-get update \
         ovmf \
         bash \
         novnc \
+        curl \
+        ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd -f kvm \

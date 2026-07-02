@@ -9,6 +9,7 @@ RUN echo "https://dl-cdn.alpinelinux.org/alpine/v3.19/community" >> /etc/apk/rep
         ovmf \
         bash \
         novnc \
+        curl \
     && rm -rf /var/cache/apk/*
 
 
