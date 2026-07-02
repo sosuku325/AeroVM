@@ -196,8 +196,14 @@ if grep -qw hypervisor /proc/cpuinfo 2>/dev/null; then
     nested_virt=1
 fi
 
+# Software-emulation CPU model. `max` exposes every feature TCG can emulate
+# (SSE4.2, POPCNT, AVX, ...). The old `qemu64` model lacks x86-64-v2, which
+# EL9-family guests (Rocky/Alma 9) hard-require — their userspace dies with
+# "Fatal glibc error: CPU does not support x86-64-v2" under qemu64.
+TCG_CPU="max"
+
 if [ "$KVM" = "off" ]; then
-    QEMU_ACCEL=(-cpu qemu64)
+    QEMU_ACCEL=(-cpu "$TCG_CPU")
     echo "INFO: KVM disabled (KVM=off), using software emulation"
 elif [ "$KVM" = "on" ]; then
     if [ "$kvm_usable" -ne 1 ]; then
@@ -211,13 +217,13 @@ elif [ "$KVM" = "on" ]; then
 elif [ "$kvm_usable" -eq 1 ] && [ "$nested_virt" -eq 1 ]; then
     # /dev/kvm is available but the node is itself a VM — avoid risking a host
     # panic from nested KVM. Use software emulation; KVM=on forces KVM.
-    QEMU_ACCEL=(-cpu qemu64)
+    QEMU_ACCEL=(-cpu "$TCG_CPU")
     echo "INFO: node is virtualized (nested) — using software emulation to avoid host-crashing nested KVM. Set KVM=on to force KVM if your host supports stable nested virtualization."
 elif [ "$kvm_usable" -eq 1 ]; then
     QEMU_ACCEL=(-enable-kvm -cpu host)
     echo "INFO: KVM enabled"
 else
-    QEMU_ACCEL=(-cpu qemu64)
+    QEMU_ACCEL=(-cpu "$TCG_CPU")
     echo "INFO: KVM not available, using software emulation"
 fi
 
@@ -435,10 +441,18 @@ else
         fi
         echo "INFO: Downloading installer ISO (this can take a while)..."
         echo "      ${OS_ISO_URL}"
-        if ! curl -fL --retry 3 -o "${INSTALLER_ISO}.part" "$OS_ISO_URL"; then
+        # -C - resumes a leftover .part from an earlier interrupted start
+        # instead of redownloading gigabytes. If the resume attempt fails
+        # (server without range support, corrupt partial), retry once from
+        # scratch; on total failure keep nothing so the next boot starts clean.
+        if ! curl -fL --retry 3 -C - -o "${INSTALLER_ISO}.part" "$OS_ISO_URL"; then
+            echo "INFO: Resume failed, retrying the download from scratch..."
             rm -f "${INSTALLER_ISO}.part"
-            echo "ERROR: Failed to download the installer ISO from OS_ISO_URL" >&2
-            exit 1
+            if ! curl -fL --retry 3 -o "${INSTALLER_ISO}.part" "$OS_ISO_URL"; then
+                rm -f "${INSTALLER_ISO}.part"
+                echo "ERROR: Failed to download the installer ISO from OS_ISO_URL" >&2
+                exit 1
+            fi
         fi
         mv "${INSTALLER_ISO}.part" "$INSTALLER_ISO"
         echo "INFO: Installer ISO saved as os.iso"
